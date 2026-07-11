@@ -33,6 +33,16 @@ Müşteri QR okutur → aktif turda oy verir → kazanan şarkı mekandaki playe
 - `docs/design-prompt.md` — HAZIR UI tasarımlarının Claude Design linkleri (admin +
   müşteri oylama); frontend yazarken claude_design MCP ile import edilecek
 
+## Geliştirme sırası (kararlaştırıldı, 2026-07-11)
+
+1. **Önce frontend, her şeyiyle bitecek.** İstek atılan tüm endpoint'ler baştan tanımlı
+   olacak ama implement edilmemiş halde MOCK veri dönecek. Gerçek API sözleşmesi
+   (path'ler, request/response şekilleri) bu aşamada netleşir.
+2. **Sonra backend:** mock'lanan endpoint'ler aynı sözleşmeyle gerçek implementasyona
+   çevrilir.
+- Mock'ların nerede yaşayacağı (Next.js route handler mı, Go stub server mı) frontend'e
+  başlarken kararlaştırılacak.
+
 ## Çalışma kuralları
 
 - HeroUI dokümanları yerelde: `.heroui-docs/react/` (bkz. kök AGENTS.md). Network'ten
