@@ -30,6 +30,8 @@ Müşteri QR okutur → aktif turda oy verir → kazanan şarkı mekandaki playe
 - `docs/architecture.md` — bileşenler, akışlar, WS protokolü, açık konular
 - `docs/database.md` — Mongo şeması (TASLAK, birlikte netleşecek)
 - `docs/decisions.md` — karar günlüğü; yeni mimari karar alınınca BURAYA tarihli ekle
+- `docs/design-prompt.md` — HAZIR UI tasarımlarının Claude Design linkleri (admin +
+  müşteri oylama); frontend yazarken claude_design MCP ile import edilecek
 
 ## Çalışma kuralları
 
