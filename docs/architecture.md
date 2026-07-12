@@ -1,6 +1,6 @@
 # Mimari
 
-> Son güncelleme: 2026-07-11. Kararların gerekçeleri için bkz. [decisions.md](decisions.md).
+> Son güncelleme: 2026-07-12. Kararların gerekçeleri için bkz. [decisions.md](decisions.md).
 
 ## Ürün özeti
 
@@ -25,7 +25,7 @@ oy verir; kazanan şarkı mekandaki player'da otomatik çalar.
 
 - **Go Backend** — tek binary (`cmd/api`). REST (playlist/mekan yönetimi, ilk sayfa
   yüklemeleri) + WebSocket hub (canlı oylar, tur olayları, player komutları) +
-  tur zamanlayıcısı (sabit aralıkla tur açıp kapatan goroutine).
+  tur yöneticisi (şarkı başlangıcında tur açan, süresi dolunca kapatan goroutine).
 - **Müşteri sayfası** (`/v/[slug]`) — QR'dan açılır. Aktif turdaki aday şarkıları ve
   canlı oy sayılarını gösterir, oy gönderir. Cihaz çerezi ile turda 1 oy.
 - **Player sayfası** (`/player`) — mekan bilgisayarında sürekli açık. YouTube IFrame
@@ -33,17 +33,30 @@ oy verir; kazanan şarkı mekandaki player'da otomatik çalar.
 - **Mekan paneli** (`/dashboard`) — mekan sahibi girişi, playlist yönetimi, tur aralığı
   ayarı, QR indirme.
 
-## Temel akış (sabit aralıklı tur)
+## Temel akış (şarkı başlangıcına bağlı turlar)
 
-1. Zamanlayıcı, mekan ayarındaki aralıkla (varsayılan 10 dk) yeni tur açar:
-   playlist'ten **rastgele N aday** seçilir (varsayılan 5; son 20 çalınan hariç,
-   ikisi de mekan ayarı), WS ile `ROUND_STARTED` yayınlanır.
+1. Bir şarkı çalmaya başladığında, açık tur yoksa yeni tur açılır: playlist'ten
+   **rastgele N aday** seçilir (varsayılan 5; son 20 çalınan hariç, ikisi de mekan
+   ayarı), WS ile `ROUND_STARTED` yayınlanır. Tur süresi varsayılan 10 dk (mekan ayarı).
 2. Müşteriler oy verir → backend cihaz başına 1 oy kuralını uygular, sayaçları
    atomik artırır (`$inc`), `VOTE_UPDATE` yayınlar.
 3. Süre dolunca `ROUND_ENDED`: kazanan şarkı mekanın çalma kuyruğuna eklenir.
    Beraberlikte eşitler arasından rastgele seçilir; hiç oy yoksa kazanan olmaz.
+   Yeni tur hemen AÇILMAZ — sıradaki şarkı başlayana kadar oylama arası verilir.
 4. Player'daki şarkı bitince (`TRACK_ENDED`) backend kuyruktan sıradakini gönderir
    (`PLAY_TRACK`). **Kuyruk boşsa playlist'ten rastgele şarkı çalınır (fallback).**
+   Bu şarkı başlayınca 1. adıma dönülür: kapanmış turdan sonraki ilk şarkı
+   başlangıcı yeni turu açar.
+
+Notlar:
+- Tur süresi şarkılardan uzun olduğu için bir tur boyunca birden fazla şarkı
+  çalabilir; tur ortasında biten şarkının yerine kuyruk/fallback devam eder ve
+  açık tur etkilenmez.
+- Player kapalıysa şarkı başlamaz → tur da açılmaz; müzik yokken oylama yoktur.
+  Müşteri sayfası bu durumda bekleme ekranı gösterir.
+- Sistem, playlist'te en az 20 şarkı (global sabit) olmadan çalışmaz: player
+  bekler, tur açılmaz. "Son N çalınan hariç" filtresi aday bulamazsa en eski
+  çalınandan başlayarak gevşetilir (bkz. decisions.md 2026-07-12).
 
 ## Player protokolü (istemciden bağımsız)
 
@@ -54,15 +67,19 @@ IFrame'li sayfamız; v2'de Chrome extension aynı protokolle ikinci istemci olab
 |---|---|---|
 | server → player | `PLAY_TRACK` | youtubeVideoId, title |
 | player → server | `TRACK_ENDED` | trackId |
+| player → server | `TRACK_ERROR` | trackId, neden (oynatılamayan video → sunucu sıradakini gönderir) |
 | player → server | `PLAYER_STATE` | playing/paused, position (periyodik) |
 | server → player | `QR_TOKEN_REFRESH` | (v2, dönen QR modu için rezerve) |
 
 ## Kimlik / erişim
 
 - **Müşteri:** login yok. İlk ziyarette anonim cihaz token'ı üretilir (httpOnly cookie).
-  Oy kaydında `deviceId + roundId` unique — turda 1 oy.
+  Oy kaydında `deviceId + roundId` unique — turda 1 aktif oy; tur kapanana kadar
+  başka adaya taşınabilir (kayıt güncellenir, sayaçlar azalt/artır).
 - **Mekan sahibi:** email + şifre (kendi implementasyonumuz; bcrypt hash, JWT veya
   session cookie — implementasyonda netleşir). Google OAuth v2 adayı.
+  Hesap↔mekan 1:1 (MVP); slug mekan adından otomatik türetilir. Email doğrulama ve
+  şifre sıfırlama MVP'de yok (mail altyapısı yok).
 - **QR:** statik, `jukebox.app/v/{slug}` URL'ini taşır. Dönen QR altyapısı v2.
 
 ## Deploy
@@ -98,3 +115,9 @@ Yeni açık konu çıktıkça buraya `- [ ]` olarak eklenecek.
 - Panelden YouTube araması (Data API)
 - Çoklu playlist (sabah/akşam modu)
 - İstatistik ekranları (en çok oy alanlar vb.)
+- Oy değiştirme cooldown'u (MVP'de sınırsız — decisions.md 2026-07-12)
+- Brute-force koruması (giriş deneme sınırı/kilitleme)
+- Mail altyapısı: email doğrulama + şifre sıfırlama
+- Tasarımlı QR masa kartı şablonu (MVP'de çıplak PNG)
+- Player yerel fallback (bağlantı kopukken offline çalmaya devam + mutabakat)
+- Çoklu mekan (zincir; MVP'de 1 hesap = 1 mekan)

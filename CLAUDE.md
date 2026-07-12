@@ -11,9 +11,11 @@ Müşteri QR okutur → aktif turda oy verir → kazanan şarkı mekandaki playe
 
 ## Temel kararlar (detay: docs/)
 
-- Sabit aralıklı oylama turları (varsayılan 10 dk, mekan ayarı); her turda playlist'ten
-  rastgele 5 aday (son 20 çalınan hariç). Kazanan kuyruğa girer (ayrı `queue`
-  koleksiyonu), kuyruk boşsa playlist'ten rastgele fallback çalar. Beraberlik: rastgele.
+- Oylama turları: tur süresi varsayılan 10 dk (mekan ayarı); yeni tur, kapanan turdan
+  sonraki ilk şarkı çalmaya başlayınca açılır (player kapalıysa tur açılmaz). Her turda
+  playlist'ten rastgele 5 aday (son 20 çalınan hariç). Kazanan kuyruğa girer (ayrı
+  `queue` koleksiyonu), kuyruk boşsa playlist'ten rastgele fallback çalar.
+  Beraberlik: rastgele.
 - Statik QR + anonim cihaz çerezi, cihaz başına turda 1 oy. Müşteri için login YOK.
   Mekan sahibi: email+şifre (bcrypt, kendi implementasyonumuz).
 - Player = mekan bilgisayarında açık duran web sayfamız (IFrame API). Player protokolü
