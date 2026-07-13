@@ -42,8 +42,8 @@ Müşteri QR okutur → aktif turda oy verir → kazanan şarkı mekandaki playe
    (path'ler, request/response şekilleri) bu aşamada netleşir.
 2. **Sonra backend:** mock'lanan endpoint'ler aynı sözleşmeyle gerçek implementasyona
    çevrilir.
-- Mock'ların nerede yaşayacağı (Next.js route handler mı, Go stub server mı) frontend'e
-  başlarken kararlaştırılacak.
+- Mock'lar `backend/` içinde Go stub server olarak yaşar (karar 2026-07-13,
+  bkz. docs/decisions.md); handler'lar backend fazında yerinde gerçeğe çevrilir.
 
 ## Çalışma kuralları
 
