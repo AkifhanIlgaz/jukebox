@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { AuthShell } from "@/features/auth/components/auth-shell";
-import { ResetPasswordForm } from "@/features/auth/components/reset-password-form";
+import { AuthShell } from "@/features/auth/components/AuthShell";
+import { ResetPasswordForm } from "@/features/auth/components/ResetPasswordForm";
 
 export const metadata: Metadata = {
   title: "Şifreyi sıfırla · Jukebox",

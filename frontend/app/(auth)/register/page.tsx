@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import { AuthShell } from "@/features/auth/components/auth-shell";
-import { RegisterForm } from "@/features/auth/components/register-form";
+import { AuthShell } from "@/features/auth/components/AuthShell";
+import { RegisterForm } from "@/features/auth/components/RegisterForm";
 
 export const metadata: Metadata = {
   title: "Kayıt ol · Jukebox",

@@ -183,6 +183,14 @@ yazılacak). `youtube-nocookie.com` KULLANILMAYACAK (oturumu bilerek tanımaz).
 **Neden:** Kullanıcı tercihi (önceden verilmiş karar). Doküman modeli tur+oy gömme ve
 `$inc` ile atomik oy sayacı artırma senaryolarına iyi oturuyor.
 
+## 2026-07-21 — Frontend dosya adlandırma: bileşen dosyaları PascalCase
+
+**Karar:** React bileşen dosyaları PascalCase (`LoginForm.tsx`), export edilen bileşen
+adıyla birebir aynı. Next.js'in kendi zorunlu dosyaları (`page.tsx`, `layout.tsx`,
+`providers.tsx` vb.) bu kuralın dışında, framework konvansiyonuna uyar.
+
+**Neden:** Kullanıcı tercihi; dosya adı ile export adı arasında fark olmasın istendi.
+
 ## 2026-07-11 — Temel yapı (önceki oturum)
 
 Monorepo (`backend/` + `frontend/`), Go backend Standard Go Layout, Next.js frontend

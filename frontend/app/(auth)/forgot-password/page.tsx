@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import { AuthShell } from "@/features/auth/components/auth-shell";
-import { ForgotPasswordForm } from "@/features/auth/components/forgot-password-form";
+import { AuthShell } from "@/features/auth/components/AuthShell";
+import { ForgotPasswordForm } from "@/features/auth/components/ForgotPasswordForm";
 
 export const metadata: Metadata = {
   title: "Şifremi unuttum · Jukebox",

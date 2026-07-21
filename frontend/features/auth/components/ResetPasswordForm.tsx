@@ -3,8 +3,8 @@
 import { Alert, Button, Form, Spinner } from "@heroui/react";
 import { useSearchParams } from "next/navigation";
 import { useState } from "react";
-import { NavLink } from "@/components/ui/nav-link";
-import { PasswordField } from "./password-field";
+import { NavLink } from "@/components/ui/NavLink";
+import { PasswordField } from "./PasswordField";
 
 export function ResetPasswordForm() {
   const searchParams = useSearchParams();

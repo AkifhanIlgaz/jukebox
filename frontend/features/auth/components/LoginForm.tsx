@@ -10,8 +10,8 @@ import {
   TextField,
 } from "@heroui/react";
 import { useState } from "react";
-import { NavLink } from "@/components/ui/nav-link";
-import { PasswordField } from "./password-field";
+import { NavLink } from "@/components/ui/NavLink";
+import { PasswordField } from "./PasswordField";
 
 export function LoginForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);

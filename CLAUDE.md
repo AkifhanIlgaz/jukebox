@@ -52,3 +52,17 @@ Müşteri QR okutur → aktif turda oy verir → kazanan şarkı mekandaki playe
 - Frontend'de Next.js 16 var — `frontend/AGENTS.md` uyarısına uy
   (`node_modules/next/dist/docs/`).
 - Mimari/şema kararları kullanıcıyla BİRLİKTE verilir; karar verilince docs/ güncellenir.
+
+## Agent skills
+
+### Issue tracker
+
+Issues ve spec'ler `.scratch/<feature-slug>/` altında markdown dosyaları olarak yaşar. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Varsayılan 5 kanonik rol (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Tek-context: kökte `CONTEXT.md` + `docs/adr/`. See `docs/agents/domain.md`.

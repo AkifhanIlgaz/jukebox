@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Alert,
   Button,
   FieldError,
   Form,
@@ -10,26 +11,45 @@ import {
   TextField,
 } from "@heroui/react";
 import { useState } from "react";
-import { NavLink } from "@/components/ui/nav-link";
-import { PasswordField } from "./password-field";
+import { NavLink } from "@/components/ui/NavLink";
 
-export function RegisterForm() {
+export function ForgotPasswordForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [password, setPassword] = useState("");
+  const [isSent, setIsSent] = useState(false);
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsSubmitting(true);
-    window.setTimeout(() => setIsSubmitting(false), 1000);
+    window.setTimeout(() => {
+      setIsSubmitting(false);
+      setIsSent(true);
+    }, 1000);
   };
+
+  if (isSent) {
+    return (
+      <div className="flex flex-col gap-4">
+        <Alert status="success">
+          <Alert.Indicator />
+          <Alert.Content>
+            <Alert.Title>Bağlantı gönderildi</Alert.Title>
+            <Alert.Description>
+              E-posta adresine ulaştıysa şifre sıfırlama bağlantısını
+              içeren bir mesaj gönderdik.
+            </Alert.Description>
+          </Alert.Content>
+        </Alert>
+        <NavLink href="/login">Girişe dön</NavLink>
+      </div>
+    );
+  }
 
   return (
     <Form className="flex flex-col gap-4" onSubmit={handleSubmit}>
-      <TextField isRequired name="venueName">
-        <Label>Mekan adı</Label>
-        <Input placeholder="örn. Kafe Luma" />
-        <FieldError />
-      </TextField>
+      <p className="text-sm text-muted">
+        Hesabına kayıtlı e-posta adresini gir, sana bir şifre sıfırlama
+        bağlantısı gönderelim.
+      </p>
 
       <TextField
         isRequired
@@ -47,44 +67,17 @@ export function RegisterForm() {
         <FieldError />
       </TextField>
 
-      <PasswordField
-        isRequired
-        description="En az 8 karakter olmalı."
-        label="Şifre"
-        minLength={8}
-        name="password"
-        onChange={setPassword}
-        validate={(value) => {
-          if (value.length < 8) {
-            return "Şifre en az 8 karakter olmalı";
-          }
-          return null;
-        }}
-      />
-
-      <PasswordField
-        isRequired
-        label="Şifre (tekrar)"
-        name="passwordConfirmation"
-        validate={(value) => {
-          if (value !== password) {
-            return "Şifreler eşleşmiyor";
-          }
-          return null;
-        }}
-      />
-
       <Button isPending={isSubmitting} type="submit" variant="primary" className="w-full">
         {({ isPending }) => (
           <>
             {isPending ? <Spinner color="current" size="sm" /> : null}
-            Hesap oluştur
+            Sıfırlama bağlantısı gönder
           </>
         )}
       </Button>
 
       <p className="text-center text-sm text-muted">
-        Zaten hesabın var mı? <NavLink href="/login">Giriş yap</NavLink>
+        <NavLink href="/login">Girişe dön</NavLink>
       </p>
     </Form>
   );
