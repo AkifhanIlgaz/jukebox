@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
+import { youtubeApi } from "@/features/admin/api/youtube-api";
+
 type YouTubePlayer = {
   playVideo: () => void;
   pauseVideo: () => void;
@@ -8,6 +10,7 @@ type YouTubePlayer = {
   getCurrentTime: () => number;
   getDuration: () => number;
   seekTo: (seconds: number, allowSeekAhead: boolean) => void;
+  loadVideoById: (videoId: string) => void;
   destroy: () => void;
 };
 
@@ -27,7 +30,7 @@ declare global {
           };
         },
       ) => YouTubePlayer;
-      PlayerState: { PLAYING: number; PAUSED: number; ENDED: number };
+      PlayerState: { PLAYING: number; PAUSED: number; ENDED: number; CUED: number };
     };
     onYouTubeIframeAPIReady?: () => void;
   }
@@ -56,18 +59,14 @@ function loadYouTubeIframeApi() {
   return apiLoadPromise;
 }
 
-async function fetchOEmbed(youtubeId: string) {
-  const url = `https://www.youtube.com/oembed?url=${encodeURIComponent(
-    `https://www.youtube.com/watch?v=${youtubeId}`,
-  )}&format=json`;
-  const response = await fetch(url);
-  const data: { title: string; author_name: string } = await response.json();
-  return { title: data.title, channel: data.author_name };
-}
-
-export function useYouTubePlayer(youtubeId: string) {
+export function useYouTubePlayer(youtubeId: string | null, options?: { onEnded?: () => void }) {
   const mountRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YouTubePlayer | null>(null);
+  const loadedVideoIdRef = useRef<string | null>(null);
+  const onEndedRef = useRef(options?.onEnded);
+  useEffect(() => {
+    onEndedRef.current = options?.onEnded;
+  }, [options?.onEnded]);
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
@@ -78,8 +77,9 @@ export function useYouTubePlayer(youtubeId: string) {
   const [channel, setChannel] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!youtubeId) return;
     let cancelled = false;
-    fetchOEmbed(youtubeId).then((info) => {
+    youtubeApi.fetchVideoInfo(youtubeId).then((info) => {
       if (cancelled) return;
       setTitle(info.title);
       setChannel(info.channel);
@@ -89,34 +89,55 @@ export function useYouTubePlayer(youtubeId: string) {
     };
   }, [youtubeId]);
 
+  // Creates the player on the first video and reuses it afterwards, loading
+  // (and autoplaying) any later video through loadVideoById instead of
+  // tearing down and recreating the iframe.
   useEffect(() => {
+    if (!youtubeId) return;
     let cancelled = false;
 
-    loadYouTubeIframeApi().then(() => {
-      if (cancelled || !mountRef.current || !window.YT) return;
+    if (!playerRef.current) {
+      loadYouTubeIframeApi().then(() => {
+        if (cancelled || !mountRef.current || !window.YT) return;
 
-      playerRef.current = new window.YT.Player(mountRef.current, {
-        videoId: youtubeId,
-        playerVars: { controls: 0, disablekb: 1, modestbranding: 1 },
-        events: {
-          onReady: (event) => {
-            setDuration(event.target.getDuration());
+        loadedVideoIdRef.current = youtubeId;
+        playerRef.current = new window.YT.Player(mountRef.current, {
+          videoId: youtubeId,
+          playerVars: { autoplay: 1, controls: 0, disablekb: 1, modestbranding: 1 },
+          events: {
+            onReady: (event) => {
+              setDuration(event.target.getDuration());
+            },
+            onStateChange: (event) => {
+              const playing = event.data === window.YT?.PlayerState.PLAYING;
+              setIsPlaying(playing);
+              if (playing || event.data === window.YT?.PlayerState.CUED) {
+                setDuration(event.target.getDuration());
+              }
+              if (event.data === window.YT?.PlayerState.ENDED) {
+                onEndedRef.current?.();
+              }
+            },
           },
-          onStateChange: (event) => {
-            const playing = event.data === window.YT?.PlayerState.PLAYING;
-            setIsPlaying(playing);
-            if (playing) setDuration(event.target.getDuration());
-          },
-        },
+        });
       });
-    });
+    } else if (loadedVideoIdRef.current !== youtubeId) {
+      loadedVideoIdRef.current = youtubeId;
+      playerRef.current.loadVideoById(youtubeId);
+      setCurrentTime(0);
+    }
 
     return () => {
       cancelled = true;
+    };
+  }, [youtubeId]);
+
+  useEffect(() => {
+    return () => {
       playerRef.current?.destroy();
       playerRef.current = null;
     };
-  }, [youtubeId]);
+  }, []);
 
   useEffect(() => {
     if (!isPlaying || isSeeking) return;

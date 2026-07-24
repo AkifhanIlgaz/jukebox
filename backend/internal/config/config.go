@@ -8,6 +8,7 @@ type Config struct {
 	// CookieDomain boş bırakılırsa çerez host-only yazılır (dev için doğru).
 	// Prod'da ".X.com" verilir (bkz. docs/architecture.md → Kimlik / erişim).
 	CookieDomain string
+	MongoURI     string
 }
 
 func Load() Config {
@@ -15,6 +16,7 @@ func Load() Config {
 		Port:          getEnv("PORT", "8080"),
 		AllowedOrigin: getEnv("ALLOWED_ORIGIN", "http://localhost:3000"),
 		CookieDomain:  os.Getenv("COOKIE_DOMAIN"),
+		MongoURI:      getEnv("MONGO_URI", ""),
 	}
 }
 

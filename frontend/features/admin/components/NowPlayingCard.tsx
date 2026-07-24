@@ -1,7 +1,7 @@
 "use client";
 
 import { Button, Card, Slider } from "@heroui/react";
-import { Pause, Play, Volume2, VolumeX } from "lucide-react";
+import { ListMusic, Pause, Play, Volume2, VolumeX } from "lucide-react";
 import Image from "next/image";
 
 import { useYouTubePlayer } from "@/features/admin/hooks/useYouTubePlayer";
@@ -13,7 +13,13 @@ function formatDuration(totalSeconds: number) {
   return `${minutes}:${String(seconds).padStart(2, "0")}`;
 }
 
-export function NowPlayingCard({ youtubeId }: { youtubeId: string }) {
+export function NowPlayingCard({
+  youtubeId,
+  onEnded,
+}: {
+  youtubeId: string | null;
+  onEnded?: () => void;
+}) {
   const {
     mountRef,
     isPlaying,
@@ -26,7 +32,17 @@ export function NowPlayingCard({ youtubeId }: { youtubeId: string }) {
     handleSeekEnd,
     togglePlayback,
     toggleMute,
-  } = useYouTubePlayer(youtubeId);
+  } = useYouTubePlayer(youtubeId, { onEnded });
+
+  if (!youtubeId) {
+    return (
+      <Card className="flex flex-col items-center justify-center gap-2 px-5.5 py-8 text-center">
+        <ListMusic className="size-8 text-muted" />
+        <div className="text-sm font-medium">Çalan şarkı yok</div>
+        <div className="text-xs text-muted">Kuyruğa bir şarkı ekleyince otomatik başlayacak.</div>
+      </Card>
+    );
+  }
 
   return (
     <Card className="flex flex-row flex-wrap items-end justify-center gap-4.5 px-5.5 py-4.5">
@@ -34,6 +50,7 @@ export function NowPlayingCard({ youtubeId }: { youtubeId: string }) {
       <div className="relative size-18 shrink-0 overflow-hidden rounded-xl bg-surface-tertiary">
         <Image
           src={`https://img.youtube.com/vi/${youtubeId}/mqdefault.jpg`}
+          loading="eager"
           alt={title ?? ""}
           fill
           className="object-cover"
