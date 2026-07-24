@@ -10,4 +10,4 @@ frontend:
 	cd frontend && npm run dev
 
 backend:
-	cd backend && go run ./...
+	cd backend && go run cmd/api

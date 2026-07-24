@@ -19,7 +19,11 @@ interface PasswordFieldProps {
   isRequired?: boolean;
   minLength?: number;
   validate?: (value: string) => string | null;
+  value?: string;
   onChange?: (value: string) => void;
+  onBlur?: () => void;
+  isInvalid?: boolean;
+  errorMessage?: string;
 }
 
 export function PasswordField({
@@ -30,7 +34,11 @@ export function PasswordField({
   isRequired,
   minLength,
   validate,
+  value,
   onChange,
+  onBlur,
+  isInvalid,
+  errorMessage,
 }: PasswordFieldProps) {
   const [isVisible, setIsVisible] = useState(false);
 
@@ -40,6 +48,8 @@ export function PasswordField({
       minLength={minLength}
       name={name}
       validate={validate}
+      value={value}
+      isInvalid={isInvalid ?? !!errorMessage}
     >
       <Label>{label}</Label>
       <InputGroup fullWidth>
@@ -47,6 +57,7 @@ export function PasswordField({
           placeholder={placeholder}
           type={isVisible ? "text" : "password"}
           onChange={onChange ? (e) => onChange(e.target.value) : undefined}
+          onBlur={onBlur}
         />
         <InputGroup.Suffix className="pr-0">
           <Button
@@ -61,7 +72,7 @@ export function PasswordField({
         </InputGroup.Suffix>
       </InputGroup>
       {description ? <Description>{description}</Description> : null}
-      <FieldError />
+      <FieldError>{errorMessage}</FieldError>
     </TextField>
   );
 }

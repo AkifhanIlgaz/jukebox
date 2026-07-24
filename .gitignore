@@ -5,3 +5,5 @@
 skills-lock.json
 
 exp/
+
+.env*

@@ -24,15 +24,21 @@
 // index: { slug: 1 } unique
 ```
 
-### owners — mekan sahipleri
+### users — mekan sahibi/admin hesapları
 
 ```js
 {
   _id: ObjectId,
-  email: "sahip@mekan.com",      // unique
-  passwordHash: "...",           // bcrypt (email+şifre auth kararlaştırıldı)
+  username: "kahvediyari",       // unique (email değil — karar 2026-07-24)
+  passwordHash: "...",           // bcrypt
+  venueId: ObjectId,             // → venues._id
   createdAt
 }
+// index: { username: 1 } unique
+// NOT: register bu iterasyonda yok, hesaplar elle açılıyor. Bir venue'nin birden
+// fazla admin'i olabilecek şekilde tasarlandı (venueId her user'da var, 1:1
+// zorunluluğu yok) — mekan sahibi ileride yeni admin ekleyebilecek (bkz. decisions.md
+// 2026-07-24).
 ```
 
 ### tracks — mekanın şarkı havuzu (mekan başına TEK havuz)

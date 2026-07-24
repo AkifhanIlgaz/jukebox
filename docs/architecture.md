@@ -76,10 +76,11 @@ IFrame'li sayfamız; v2'de Chrome extension aynı protokolle ikinci istemci olab
 - **Müşteri:** login yok. İlk ziyarette anonim cihaz token'ı üretilir (httpOnly cookie).
   Oy kaydında `deviceId + roundId` unique — turda 1 aktif oy; tur kapanana kadar
   başka adaya taşınabilir (kayıt güncellenir, sayaçlar azalt/artır).
-- **Mekan sahibi:** email + şifre (kendi implementasyonumuz; bcrypt hash, JWT veya
-  session cookie — implementasyonda netleşir). Google OAuth v2 adayı.
-  Hesap↔mekan 1:1 (MVP); slug mekan adından otomatik türetilir. Email doğrulama ve
-  şifre sıfırlama MVP'de yok (mail altyapısı yok).
+- **Mekan sahibi:** username + şifre (kendi implementasyonumuz; bcrypt hash, JWT
+  süresiz token, httpOnly `auth_token` çerezi — karar 2026-07-24). Google OAuth v2
+  adayı. Slug mekan adından otomatik türetilir. Register bu iterasyonda yok (hesaplar
+  elle açılır); bir mekanın birden fazla admin'i olabilir. Şifre sıfırlama MVP'de yok
+  (mail altyapısı yok).
 - **QR:** statik, `jukebox.app/v/{slug}` URL'ini taşır. Dönen QR altyapısı v2.
 
 ## Deploy
