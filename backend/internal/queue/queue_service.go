@@ -14,6 +14,10 @@ import (
 // seçiminde hariç tutulacak track sayısı).
 const recentWindow = 20
 
+// queuePreviewLimit, GET /queue'nun döndürdüğü maksimum şarkı sayısı
+// (toplam sayı ayrıca dönülür, liste bu kadarla sınırlıdır).
+const queuePreviewLimit = 5
+
 type QueueService struct {
 	redisClient  *redis.Client
 	trackService *track.TrackService
@@ -26,10 +30,33 @@ func NewQueueService(redisClient *redis.Client, trackService *track.TrackService
 	}
 }
 
-// Enqueue, tur kazananını venue'nin çalma sırasına ekler.
+// Enqueue, tur kazananını venue'nin çalma sırasına ekler. Şarkı zaten
+// sıradaysa ErrTrackAlreadyQueued döner (sıradaki şarkılar benzersizdir).
 func (s *QueueService) Enqueue(ctx context.Context, venueId bson.ObjectID, youtubeId string) error {
+	_, err := s.redisClient.LPos(ctx, queueKey(venueId), youtubeId, redis.LPosArgs{}).Result()
+	if err == nil {
+		return ErrTrackAlreadyQueued
+	}
+	if !errors.Is(err, redis.Nil) {
+		return fmt.Errorf("failed to check queued track: %w", err)
+	}
+
 	if err := s.redisClient.RPush(ctx, queueKey(venueId), youtubeId).Err(); err != nil {
 		return fmt.Errorf("failed to enqueue track: %w", err)
+	}
+
+	return nil
+}
+
+// Remove, sıradan bir şarkıyı çıkarır. Şarkı sırada değilse
+// ErrTrackNotQueued döner.
+func (s *QueueService) Remove(ctx context.Context, venueId bson.ObjectID, youtubeId string) error {
+	removed, err := s.redisClient.LRem(ctx, queueKey(venueId), 0, youtubeId).Result()
+	if err != nil {
+		return fmt.Errorf("failed to remove track from queue: %w", err)
+	}
+	if removed == 0 {
+		return ErrTrackNotQueued
 	}
 
 	return nil
@@ -76,18 +103,24 @@ func (s *QueueService) IsRecentlyPlayed(ctx context.Context, venueId bson.Object
 }
 
 // Next, sıradaki şarkıyı döner: sıra doluysa LPOP, boşsa playlistten
-// rastgele fallback seçer (son çalınanlar hariç). İkisi de boşsa
-// ErrNoPlayableTrack döner.
+// rastgele fallback seçer (son çalınanlar hariç). Sıradaki bir kayıt
+// çözülemezse (ör. hem playlist'ten hem YouTube'dan silinmiş) o kayıt
+// atlanıp bir sonrakiyle devam edilir. Hiçbiri çözülemez ve sıra
+// tükenirse fallback'e düşülür, o da başarısızsa ErrNoPlayableTrack
+// döner.
 func (s *QueueService) Next(ctx context.Context, venueId bson.ObjectID) (*track.PlaylistTrack, error) {
-	youtubeId, err := s.redisClient.LPop(ctx, queueKey(venueId)).Result()
-	if err != nil && !errors.Is(err, redis.Nil) {
-		return nil, fmt.Errorf("failed to pop next track from queue: %w", err)
-	}
+	for {
+		youtubeId, err := s.redisClient.LPop(ctx, queueKey(venueId)).Result()
+		if err != nil {
+			if errors.Is(err, redis.Nil) {
+				break
+			}
+			return nil, fmt.Errorf("failed to pop next track from queue: %w", err)
+		}
 
-	if err == nil {
 		playlistTrack, err := s.trackService.GetTrackByYoutubeId(ctx, venueId, youtubeId)
 		if err != nil {
-			return nil, fmt.Errorf("failed to fetch queued track: %w", err)
+			continue
 		}
 
 		if err := s.MarkPlayed(ctx, venueId, youtubeId); err != nil {
@@ -118,29 +151,41 @@ func (s *QueueService) Next(ctx context.Context, venueId bson.ObjectID) (*track.
 }
 
 // List, sıradaki şarkıları (henüz çalınmamış, sırayla) döner.
-func (s *QueueService) List(ctx context.Context, venueId bson.ObjectID) ([]track.PlaylistTrack, error) {
-	youtubeIds, err := s.redisClient.LRange(ctx, queueKey(venueId), 0, -1).Result()
+func (s *QueueService) List(ctx context.Context, venueId bson.ObjectID) ([]track.PlaylistTrack, int64, error) {
+	youtubeIds, err := s.redisClient.LRange(ctx, queueKey(venueId), 0, queuePreviewLimit-1).Result()
 	if err != nil {
-		return nil, fmt.Errorf("failed to list queue: %w", err)
+		return nil, 0, fmt.Errorf("failed to list queue: %w", err)
+	}
+
+	total, err := s.Len(ctx, venueId)
+	if err != nil {
+		return nil, 0, err
 	}
 
 	tracks := make([]track.PlaylistTrack, 0, len(youtubeIds))
 	for _, youtubeId := range youtubeIds {
 		playlistTrack, err := s.trackService.GetTrackByYoutubeId(ctx, venueId, youtubeId)
 		if err != nil {
-			return nil, fmt.Errorf("failed to fetch queued track: %w", err)
+			continue
 		}
 		tracks = append(tracks, *playlistTrack)
 	}
 
-	return tracks, nil
+	return tracks, total, nil
 }
 
 // EnqueueManual, admin panelden elle eklenen bir şarkıyı venue playlist'ine
 // (henüz yoksa) ekler ve sıraya alır.
 func (s *QueueService) EnqueueManual(ctx context.Context, req track.AddTrackRequest) error {
-	if err := s.trackService.InsertTrack(ctx, req); err != nil && !errors.Is(err, track.ErrTrackAlreadyExists) {
-		return fmt.Errorf("failed to add track to playlist: %w", err)
+	exists, err := s.trackService.TrackExistsInPlaylist(ctx, req.VenueId, req.YoutubeVideoID)
+	if err != nil {
+		return err
+	}
+
+	if !exists {
+		if err := s.trackService.InsertTrack(ctx, req); err != nil && !errors.Is(err, track.ErrTrackAlreadyExists) {
+			return fmt.Errorf("failed to add track to playlist: %w", err)
+		}
 	}
 
 	return s.Enqueue(ctx, req.VenueId, req.YoutubeVideoID)

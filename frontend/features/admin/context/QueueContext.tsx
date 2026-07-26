@@ -18,6 +18,7 @@ type QueueContextValue = {
   handleSeekEnd: (value: number) => void;
   togglePlayback: () => void;
   toggleMute: () => void;
+  playNow: (youtubeId: string) => void;
 };
 
 const QueueContext = createContext<QueueContextValue | null>(null);
@@ -41,6 +42,10 @@ export function QueueProvider({ children }: { children: React.ReactNode }) {
 
   const player = useYouTubePlayer(nowPlayingId, { onEnded: advance });
 
+  const playNow = useCallback((youtubeId: string) => {
+    setNowPlayingId(youtubeId);
+  }, []);
+
   return (
     <QueueContext.Provider
       value={{
@@ -56,6 +61,7 @@ export function QueueProvider({ children }: { children: React.ReactNode }) {
         handleSeekEnd: player.handleSeekEnd,
         togglePlayback: player.togglePlayback,
         toggleMute: player.toggleMute,
+        playNow,
       }}
     >
       <div ref={player.mountRef} className="hidden" />

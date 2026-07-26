@@ -16,6 +16,7 @@ export type QueuedTrack = z.infer<typeof queuedTrackSchema>;
 
 const queueResponseSchema = z.object({
   tracks: z.array(queuedTrackSchema),
+  total: z.number(),
 });
 
 const addToQueueResponseSchema = z.object({
@@ -33,6 +34,10 @@ class QueueApi extends BaseApi {
 
   async next() {
     return this.post("/queue/next", queuedTrackSchema);
+  }
+
+  async removeFromQueue(youtubeId: string) {
+    return this.delete(`/queue/${youtubeId}`, z.unknown());
   }
 }
 

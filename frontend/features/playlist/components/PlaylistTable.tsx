@@ -1,7 +1,7 @@
 "use client";
 
 import type { Key } from "@heroui/react";
-import { Card, EmptyState, Label, ListBox, Pagination, Select, Table } from "@heroui/react";
+import { Card, EmptyState, Label, ListBox, Pagination, Select, Spinner, Table } from "@heroui/react";
 import { ListMusic } from "lucide-react";
 import { useState } from "react";
 
@@ -63,15 +63,22 @@ export function PlaylistTable() {
               <Table.Column className="text-end">Aksiyonlar</Table.Column>
             </Table.Header>
             <Table.Body
-              renderEmptyState={() => (
-                <EmptyState className="flex h-full w-full flex-col items-center justify-center gap-2 py-8 text-center">
-                  <ListMusic className="size-8 text-muted" />
-                  <span className="text-sm font-medium">Playlist boş</span>
-                  <span className="text-xs text-muted">
-                    Yukarıdan bir YouTube linki ekleyerek başlayabilirsin.
-                  </span>
-                </EmptyState>
-              )}
+              renderEmptyState={() =>
+                tracksQuery.isLoading ? (
+                  <div className="flex h-full w-full flex-col items-center justify-center gap-2 py-8 text-center">
+                    <Spinner size="md" />
+                    <span className="text-sm font-medium">Playlist yükleniyor...</span>
+                  </div>
+                ) : (
+                  <EmptyState className="flex h-full w-full flex-col items-center justify-center gap-2 py-8 text-center">
+                    <ListMusic className="size-8 text-muted" />
+                    <span className="text-sm font-medium">Playlist boş</span>
+                    <span className="text-xs text-muted">
+                      Yukarıdan bir YouTube linki ekleyerek başlayabilirsin.
+                    </span>
+                  </EmptyState>
+                )
+              }
             >
               {tracks.map((track) => (
                 <PlaylistTableRow

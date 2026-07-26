@@ -27,17 +27,18 @@ func (h *QueueHandler) RegisterRoutes(app *fiber.App) {
 	queue.Get("/", h.GetQueue)
 	queue.Post("/", h.AddToQueue)
 	queue.Post("/next", h.Next)
+	queue.Delete("/:youtubeId", h.RemoveFromQueue)
 }
 
 func (h *QueueHandler) GetQueue(ctx fiber.Ctx) error {
 	venueId := middleware.GetVenueID(ctx)
 
-	tracks, err := h.service.List(ctx.Context(), venueId)
+	tracks, total, err := h.service.List(ctx.Context(), venueId)
 	if err != nil {
 		return err
 	}
 
-	return ctx.Status(200).JSON(fiber.Map{"tracks": tracks})
+	return ctx.Status(200).JSON(fiber.Map{"tracks": tracks, "total": total})
 }
 
 func (h *QueueHandler) AddToQueue(ctx fiber.Ctx) error {
@@ -57,6 +58,9 @@ func (h *QueueHandler) AddToQueue(ctx fiber.Ctx) error {
 	req.UserId = middleware.GetUserID(ctx)
 
 	if err := h.service.EnqueueManual(ctx.Context(), req); err != nil {
+		if errors.Is(err, ErrTrackAlreadyQueued) {
+			return fiber.NewError(fiber.StatusConflict, err.Error())
+		}
 		return err
 	}
 
@@ -75,4 +79,18 @@ func (h *QueueHandler) Next(ctx fiber.Ctx) error {
 	}
 
 	return ctx.Status(200).JSON(playlistTrack)
+}
+
+func (h *QueueHandler) RemoveFromQueue(ctx fiber.Ctx) error {
+	venueId := middleware.GetVenueID(ctx)
+	youtubeId := ctx.Params("youtubeId")
+
+	if err := h.service.Remove(ctx.Context(), venueId, youtubeId); err != nil {
+		if errors.Is(err, ErrTrackNotQueued) {
+			return fiber.NewError(fiber.StatusNotFound, err.Error())
+		}
+		return err
+	}
+
+	return ctx.SendStatus(200)
 }

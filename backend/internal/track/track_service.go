@@ -170,6 +170,20 @@ func (s *TrackService) DeleteTrack(ctx context.Context, venueId, trackId bson.Ob
 	return nil
 }
 
+// TrackExistsInPlaylist, YouTube'a hiç istek atmadan (sadece Mongo'ya
+// bakarak) bir track'in venue'nin playlist'inde olup olmadığını döner.
+func (s *TrackService) TrackExistsInPlaylist(ctx context.Context, venueId bson.ObjectID, youtubeId string) (bool, error) {
+	count, err := s.playlistsCollection.CountDocuments(ctx, bson.M{
+		"venue_id":   venueId,
+		"youtube_id": youtubeId,
+	})
+	if err != nil {
+		return false, fmt.Errorf("failed to check track existence: %w", err)
+	}
+
+	return count > 0, nil
+}
+
 func (s *TrackService) GetTrackByYoutubeId(ctx context.Context, venueId bson.ObjectID, youtubeId string) (*PlaylistTrack, error) {
 	filter := bson.M{
 		"venue_id":   venueId,
@@ -178,10 +192,24 @@ func (s *TrackService) GetTrackByYoutubeId(ctx context.Context, venueId bson.Obj
 
 	var playlistTrack PlaylistTrack
 	if err := s.playlistsCollection.FindOne(ctx, filter).Decode(&playlistTrack); err != nil {
-		if errors.Is(err, mongo.ErrNoDocuments) {
+		if !errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, fmt.Errorf("failed to fetch track: %w", err)
+		}
+
+		// Playlist'te bulunamadı (ör. Redis'teki sıra/geçmiş kaydı playlist'ten
+		// silinmiş bir şarkıya işaret ediyor olabilir) — YouTube'dan taze bilgi
+		// çekip stale referansı yine de kullanılabilir kılıyoruz.
+		trackInfo, err := s.youtubeClient.ExtractTrackInfo(youtubeId)
+		if err != nil {
 			return nil, ErrTrackNotFound
 		}
-		return nil, fmt.Errorf("failed to fetch track: %w", err)
+
+		return &PlaylistTrack{
+			YoutubeID: youtubeId,
+			Title:     trackInfo.Title,
+			Channel:   trackInfo.Channel,
+			VenueID:   venueId,
+		}, nil
 	}
 
 	return &playlistTrack, nil
