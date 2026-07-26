@@ -170,6 +170,23 @@ func (s *TrackService) DeleteTrack(ctx context.Context, venueId, trackId bson.Ob
 	return nil
 }
 
+func (s *TrackService) GetTrackByYoutubeId(ctx context.Context, venueId bson.ObjectID, youtubeId string) (*PlaylistTrack, error) {
+	filter := bson.M{
+		"venue_id":   venueId,
+		"youtube_id": youtubeId,
+	}
+
+	var playlistTrack PlaylistTrack
+	if err := s.playlistsCollection.FindOne(ctx, filter).Decode(&playlistTrack); err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, ErrTrackNotFound
+		}
+		return nil, fmt.Errorf("failed to fetch track: %w", err)
+	}
+
+	return &playlistTrack, nil
+}
+
 func (s *TrackService) RandomTrack(ctx context.Context, venueId bson.ObjectID, excludeYoutubeIds []string) (*PlaylistTrack, error) {
 	filter := bson.M{
 		"venue_id": venueId,

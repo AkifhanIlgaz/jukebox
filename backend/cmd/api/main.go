@@ -9,6 +9,7 @@ import (
 	"github.com/AkifhanIlgaz/jukebox/internal/config"
 	"github.com/AkifhanIlgaz/jukebox/internal/db"
 	"github.com/AkifhanIlgaz/jukebox/internal/middleware"
+	"github.com/AkifhanIlgaz/jukebox/internal/queue"
 	"github.com/AkifhanIlgaz/jukebox/internal/track"
 	"github.com/AkifhanIlgaz/jukebox/internal/youtube"
 	"github.com/gofiber/fiber/v3"
@@ -28,6 +29,13 @@ func main() {
 
 	defer database.Client().Disconnect(context.Background())
 
+	redisClient, err := db.ConnectRedis(cfg.RedisAddr, cfg.RedisPassword, cfg.RedisDB)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer redisClient.Close()
+
 	ytClient := youtube.NewClient()
 
 	authMiddleware := middleware.NewAuthMiddleware(cfg.JWTSecret)
@@ -36,6 +44,9 @@ func main() {
 
 	trackService := track.NewTrackService(database, ytClient)
 	trackHandler := track.NewTrackHandler(trackService, authMiddleware)
+
+	queueService := queue.NewQueueService(redisClient, trackService)
+	queueHandler := queue.NewQueueHandler(queueService, authMiddleware)
 
 	app := fiber.New(fiber.Config{
 		ErrorHandler: func(c fiber.Ctx, err error) error {
@@ -70,6 +81,7 @@ func main() {
 
 	authHandler.RegisterRoutes(app)
 	trackHandler.RegisterRoutes(app)
+	queueHandler.RegisterRoutes(app)
 
 	log.Fatal(app.Listen(":" + cfg.Port))
 }

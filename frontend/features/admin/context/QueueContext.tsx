@@ -1,16 +1,12 @@
 "use client";
 
-import { createContext, useCallback, useContext, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useState } from "react";
 
 import { useYouTubePlayer } from "@/features/admin/hooks/useYouTubePlayer";
-
-type QueueEntry = { key: string; videoId: string };
+import { useNextTrack } from "@/features/queue/hooks/useNextTrack";
 
 type QueueContextValue = {
   nowPlayingId: string | null;
-  queue: QueueEntry[];
-  addToQueue: (videoId: string) => void;
-  playFromQueue: (key: string) => void;
   mountRef: ReturnType<typeof useYouTubePlayer>["mountRef"];
   isPlaying: boolean;
   isMuted: boolean;
@@ -28,43 +24,27 @@ const QueueContext = createContext<QueueContextValue | null>(null);
 
 export function QueueProvider({ children }: { children: React.ReactNode }) {
   const [nowPlayingId, setNowPlayingId] = useState<string | null>(null);
-  const [queue, setQueue] = useState<QueueEntry[]>([]);
+  const nextTrackMutation = useNextTrack();
 
-  const addToQueue = useCallback((videoId: string) => {
-    setNowPlayingId((current) => {
-      if (current === null) return videoId;
-      setQueue((currentQueue) => [...currentQueue, { key: crypto.randomUUID(), videoId }]);
-      return current;
+  const advance = useCallback(() => {
+    nextTrackMutation.mutate(undefined, {
+      onSuccess: (nextTrack) => setNowPlayingId(nextTrack.youtubeId),
+      onError: () => setNowPlayingId(null),
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const playFromQueue = useCallback((key: string) => {
-    setQueue((current) => {
-      const entry = current.find((item) => item.key === key);
-      if (!entry) return current;
-      setNowPlayingId(entry.videoId);
-      return current.filter((item) => item.key !== key);
-    });
+  useEffect(() => {
+    advance();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleEnded = useCallback(() => {
-    setQueue((current) => {
-      if (current.length === 0) return current;
-      const [next, ...rest] = current;
-      setNowPlayingId(next.videoId);
-      return rest;
-    });
-  }, []);
-
-  const player = useYouTubePlayer(nowPlayingId, { onEnded: handleEnded });
+  const player = useYouTubePlayer(nowPlayingId, { onEnded: advance });
 
   return (
     <QueueContext.Provider
       value={{
         nowPlayingId,
-        queue,
-        addToQueue,
-        playFromQueue,
         mountRef: player.mountRef,
         isPlaying: player.isPlaying,
         isMuted: player.isMuted,

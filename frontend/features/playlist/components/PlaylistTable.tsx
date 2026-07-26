@@ -5,20 +5,19 @@ import { Card, EmptyState, Label, ListBox, Pagination, Select, Table } from "@he
 import { ListMusic } from "lucide-react";
 import { useState } from "react";
 
-import { useQueue } from "@/features/admin/context/QueueContext";
 import { PlaylistTableRow } from "@/features/playlist/components/PlaylistTableRow";
 import { useDeleteTrack } from "@/features/playlist/hooks/useDeleteTrack";
 import { useTracks } from "@/features/playlist/hooks/useTracks";
+import { useAddToQueue } from "@/features/queue/hooks/useAddToQueue";
 
 const ROWS_PER_PAGE_OPTIONS = [5, 10, 25, 50] as const;
 
 export function PlaylistTable() {
   const [page, setPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState<number>(ROWS_PER_PAGE_OPTIONS[2]);
-  const { addToQueue } = useQueue();
-
   const tracksQuery = useTracks({ page, limit: rowsPerPage });
   const deleteTrackMutation = useDeleteTrack();
+  const addToQueueMutation = useAddToQueue();
 
   const tracks = tracksQuery.data?.tracks ?? [];
   const total = tracksQuery.data?.total ?? 0;
@@ -83,7 +82,11 @@ export function PlaylistTable() {
                   }
                   title={track.title}
                   youtubeId={track.youtubeId}
-                  onAddToQueue={() => addToQueue(track.youtubeId)}
+                  onAddToQueue={() =>
+                    addToQueueMutation.mutate({
+                      youtubeUrl: `https://www.youtube.com/watch?v=${track.youtubeId}`,
+                    })
+                  }
                   onDelete={() => deleteTrackMutation.mutate({ id: track.id, title: track.title })}
                 />
               ))}
