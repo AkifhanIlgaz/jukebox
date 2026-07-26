@@ -7,9 +7,13 @@ import (
 )
 
 type VenueSettings struct {
-	RoundIntervalMin     int `bson:"round_interval_min" json:"roundIntervalMin"`
-	CandidateCount       int `bson:"candidate_count" json:"candidateCount"`
-	RecentlyPlayedWindow int `bson:"recently_played_window" json:"recentlyPlayedWindow"`
+	RoundIntervalMin int `bson:"round_interval_min" json:"roundIntervalMin"`
+	CandidateCount   int `bson:"candidate_count" json:"candidateCount"`
+	// RecentlyPlayedCooldownMin, bir şarkının tekrar aday/fallback
+	// olabilmesi için son çalınışından bu kadar dakika geçmesi gerektiğini
+	// belirtir (bkz. decisions.md 2026-07-26 — sayı bazlı pencereden süre
+	// bazlı cooldown'a geçiş).
+	RecentlyPlayedCooldownMin int `bson:"recently_played_cooldown_min" json:"recentlyPlayedCooldownMin"`
 }
 
 type Venue struct {

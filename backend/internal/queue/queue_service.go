@@ -4,15 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/AkifhanIlgaz/jukebox/internal/track"
+	"github.com/AkifhanIlgaz/jukebox/internal/venue"
 	"github.com/redis/go-redis/v9"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
-
-// recentWindow, "son N çalınan" penceresinin boyutu (round'un aday
-// seçiminde hariç tutulacak track sayısı).
-const recentWindow = 20
 
 // queuePreviewLimit, GET /queue'nun döndürdüğü maksimum şarkı sayısı
 // (toplam sayı ayrıca dönülür, liste bu kadarla sınırlıdır).
@@ -21,12 +19,14 @@ const queuePreviewLimit = 5
 type QueueService struct {
 	redisClient  *redis.Client
 	trackService *track.TrackService
+	venueService *venue.VenueService
 }
 
-func NewQueueService(redisClient *redis.Client, trackService *track.TrackService) *QueueService {
+func NewQueueService(redisClient *redis.Client, trackService *track.TrackService, venueService *venue.VenueService) *QueueService {
 	return &QueueService{
 		redisClient:  redisClient,
 		trackService: trackService,
+		venueService: venueService,
 	}
 }
 
@@ -72,36 +72,6 @@ func (s *QueueService) Len(ctx context.Context, venueId bson.ObjectID) (int64, e
 	return length, nil
 }
 
-// MarkPlayed, bir şarkı çalmaya başladığında son-çalınanlar listesine ekler
-// (recentWindow'u aşınca en eski kayıt düşer).
-func (s *QueueService) MarkPlayed(ctx context.Context, venueId bson.ObjectID, youtubeId string) error {
-	key := recentKey(venueId)
-
-	_, err := s.redisClient.Pipelined(ctx, func(pipe redis.Pipeliner) error {
-		pipe.LPush(ctx, key, youtubeId)
-		pipe.LTrim(ctx, key, 0, recentWindow-1)
-		return nil
-	})
-	if err != nil {
-		return fmt.Errorf("failed to mark track as played: %w", err)
-	}
-
-	return nil
-}
-
-// IsRecentlyPlayed, track'in son-çalınanlar penceresinde olup olmadığını döner.
-func (s *QueueService) IsRecentlyPlayed(ctx context.Context, venueId bson.ObjectID, youtubeId string) (bool, error) {
-	_, err := s.redisClient.LPos(ctx, recentKey(venueId), youtubeId, redis.LPosArgs{}).Result()
-	if err != nil {
-		if errors.Is(err, redis.Nil) {
-			return false, nil
-		}
-		return false, fmt.Errorf("failed to check recently played track: %w", err)
-	}
-
-	return true, nil
-}
-
 // Next, sıradaki şarkıyı döner: sıra doluysa LPOP, boşsa playlistten
 // rastgele fallback seçer (son çalınanlar hariç). Sıradaki bir kayıt
 // çözülemezse (ör. hem playlist'ten hem YouTube'dan silinmiş) o kayıt
@@ -123,19 +93,19 @@ func (s *QueueService) Next(ctx context.Context, venueId bson.ObjectID) (*track.
 			continue
 		}
 
-		if err := s.MarkPlayed(ctx, venueId, youtubeId); err != nil {
+		if err := s.trackService.MarkPlayed(ctx, venueId, youtubeId); err != nil {
 			return nil, err
 		}
 
 		return playlistTrack, nil
 	}
 
-	excludeYoutubeIds, err := s.redisClient.LRange(ctx, recentKey(venueId), 0, -1).Result()
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch recently played tracks: %w", err)
-	}
+	// TODO: venueService.GetByID ile venue'nin
+	// settings.recentlyPlayedCooldownMin'ini çek, cooldownCutoff'u
+	// (time.Now().Add(-cooldown)) hesapla ve aşağıya ver.
+	var cooldownCutoff time.Time
 
-	playlistTrack, err := s.trackService.RandomTrack(ctx, venueId, excludeYoutubeIds)
+	playlistTrack, err := s.trackService.RandomTrack(ctx, venueId, cooldownCutoff)
 	if err != nil {
 		if errors.Is(err, track.ErrNoAvailableTrack) {
 			return nil, ErrNoPlayableTrack
@@ -143,7 +113,7 @@ func (s *QueueService) Next(ctx context.Context, venueId bson.ObjectID) (*track.
 		return nil, fmt.Errorf("failed to fetch fallback track: %w", err)
 	}
 
-	if err := s.MarkPlayed(ctx, venueId, playlistTrack.YoutubeID); err != nil {
+	if err := s.trackService.MarkPlayed(ctx, venueId, playlistTrack.YoutubeID); err != nil {
 		return nil, err
 	}
 

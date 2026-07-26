@@ -1,4 +1,4 @@
-# Jukebox
+# TINI
 
 Mekanlarda (kafe vb.) arka plan müziğini müşteri oylamasıyla seçtiren sistem.
 Müşteri QR okutur → aktif turda oy verir → kazanan şarkı mekandaki player'da çalar.

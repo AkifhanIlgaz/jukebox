@@ -9,7 +9,7 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
-  title: "Jukebox",
+  title: "TINI",
   description: "Paylaşımlı müzik kuyruğu",
 };
 

@@ -37,7 +37,7 @@ export default function Home() {
       <header className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <span className="text-2xl">🎵</span>
-          <h1 className="text-xl font-semibold text-foreground">Jukebox</h1>
+          <h1 className="text-xl font-semibold text-foreground">TINI</h1>
           <Chip color="warning" size="sm">
             Beta
           </Chip>

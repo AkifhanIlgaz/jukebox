@@ -11,6 +11,7 @@ import (
 	"github.com/AkifhanIlgaz/jukebox/internal/middleware"
 	"github.com/AkifhanIlgaz/jukebox/internal/queue"
 	"github.com/AkifhanIlgaz/jukebox/internal/track"
+	"github.com/AkifhanIlgaz/jukebox/internal/venue"
 	"github.com/AkifhanIlgaz/jukebox/internal/youtube"
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/cors"
@@ -45,7 +46,9 @@ func main() {
 	trackService := track.NewTrackService(database, ytClient)
 	trackHandler := track.NewTrackHandler(trackService, authMiddleware)
 
-	queueService := queue.NewQueueService(redisClient, trackService)
+	venueService := venue.NewVenueService(database)
+
+	queueService := queue.NewQueueService(redisClient, trackService, venueService)
 	queueHandler := queue.NewQueueHandler(queueService, authMiddleware)
 
 	app := fiber.New(fiber.Config{

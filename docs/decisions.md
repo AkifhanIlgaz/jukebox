@@ -5,6 +5,66 @@ Bir karar değişirse silinmez; üstüne "İPTAL/REVİZE (tarih)" notu düşül�
 
 ---
 
+## 2026-07-26 — Uygulama adı: TINI, logo: audiowave
+
+**Karar:** Uygulamanın adı **TINI** olarak belirlendi. Logo audiowave (ses dalgası)
+motifi kullanacak.
+
+**Neden:** Kullanıcı tercihi.
+
+**Sonuç:** "Jukebox" ismi proje adı olarak geçtiği yerlerde (CLAUDE.md başlığı, README,
+frontend sayfa title/başlık) TINI ile değiştirildi. Repo klasör adı (`jukebox/`) ve kod
+içindeki `jukebox` geçen tanımlayıcılar (paket/servis adları vb.) bu kararın kapsamı
+dışında — ayrı bir rename gerekirse sonra ele alınır. Logo asseti (audiowave)
+tasarım/implementasyon aşaması henüz yapılmadı.
+
+## 2026-07-26 — "Son çalınan" filtresi: Redis sayı bazlı listeden Mongo süre bazlı cooldown'a
+
+**Karar:** Queue fallback seçimindeki (ve round'un aday seçimindeki) "son çalınanları
+hariç tut" filtresi artık Redis'teki sayı bazlı `venue:{venueId}:recent` listesi
+(`LPUSH`/`LTRIM`, son N şarkı) ile değil, `tracks` (playlist) dokümanındaki
+`last_played_at` alanına bakan **süre bazlı cooldown** ile çalışır (`venue.settings.
+recentlyPlayedCooldownMin`, dakika). Redis `recent` key'i ve `QueueService.
+MarkPlayed`/`IsRecentlyPlayed` kalktı; `MarkPlayed` ve rastgele şarkı seçimi artık
+`TrackService`'te (Mongo `$set: last_played_at` / `$or: [{last_played_at: nil},
+{last_played_at: {$lt: cutoff}}]`).
+
+**Neden:** Kullanıcı tercihi + database.md'de zaten tanımlı olan (ama koda hiç
+girmemiş) `tracks.lastPlayedAt` alanıyla tutarlılık. Ayrıca sayı bazlı pencere
+playlist küçükken (`RandomTrack`'in `$nin` sorgusu tüm playlist'i hariç tutabiliyor)
+gerçek bir bug'a yol açtı (bkz. aşağıdaki alt karar) — süre bazlı cooldown +
+gevşetme fallback'i bunu yapısal olarak çözüyor.
+
+**Alt karar — gevşetme her zaman geçerli:** `RandomTrack`, cooldown filtresi hiç
+sonuç vermezse (ör. küçük playlist'te tüm şarkılar cooldown'da) playlist boş
+olmadığı sürece ASLA boş dönmemeli; bu durumda cooldown'u yok sayıp `last_played_at`
+ascending (null'lar önce) sıralı en eski çalınan/hiç çalınmamış şarkıyı fallback
+olarak döner. Bu, 2026-07-12'deki "aday seçiminde gevşetme" kuralının queue'nun
+tekil fallback seçimine de genelleştirilmiş hali — daha önce sadece round'un 5
+adaylık seçimi için yazılmıştı, tekil seçimde uygulanmadığı için playlist küçükken
+(5 şarkı, hepsi son-N'de) hiç şarkı dönmeme bug'ı yaşandı.
+
+**Sonuç:** `venue.settings.recentlyPlayedWindow` (sayı) →
+`recentlyPlayedCooldownMin` (dakika) olarak yeniden adlandırıldı/anlamı değişti
+(bkz. database.md). `PlaylistTrack.LastPlayedAt *time.Time` alanı eklendi
+(database.md'deki taslakla uyumlu).
+
+## 2026-07-26 — WebSocket ertelendi: round da queue gibi önce REST ile yazılacak
+
+**Karar:** WS hub'ı (ve architecture.md'deki `PLAY_TRACK`/`TRACK_ENDED`/`VOTE_UPDATE`
+gibi mesajlar) şimdilik ertelendi. Round (oylama turu) akışı da queue gibi önce REST
+endpoint'leriyle yazılacak; canlı oy sayısı/tur olayları client'a WS yerine polling
+ile gidecek. WS'e geçiş ileride ayrı bir iterasyonda yapılacak.
+
+**Neden:** Kullanıcı tercihi. Hub'ın tasarımı netleşmeden (auth stratejisi, round
+scheduler ile ilişkisi, mevcut REST-polling'in tamamen mi yoksa kısmen mi WS'e
+taşınacağı gibi açık noktalar) somut koda geçmek riskli görüldü; queue REST ile
+zaten çalışıyor, round da aynı yolu izleyip iş mantığı önce netleşecek.
+
+**Sonuç:** `middleware.Auth` no-op kaldığı sürece (2026-07-24 notu) WS auth konusu da
+zaten açığa çıkmıyor. WS hub'ı kurulacağı zaman round scheduler'la birlikte
+tasarlanacak (round kapanışı da WS'ten gidecek mesajlardan biri).
+
 ## 2026-07-25 — Canlı oy sayacı ve kuyruk: Redis (Mongo değil)
 
 **Karar:** Tur içi oy sayaçları Redis **sorted set**'te tutulur (`round:{roundId}:votes`,

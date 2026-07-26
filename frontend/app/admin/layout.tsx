@@ -9,7 +9,11 @@ import { SidebarUserMenu } from "@/components/ui/app-layout/SidebarUserMenu";
 import { SidebarThemeToggle } from "@/components/ui/app-layout/SidebarThemeToggle";
 import { QueueProvider } from "@/features/admin/context/QueueContext";
 import { NowPlayingIndicator } from "@/features/admin/components/NowPlayingIndicator";
-import { LayoutDashboard, ListMusic, Music, QrCode, Settings } from "lucide-react";
+import { AudioLines, LayoutDashboard, ListMusic, QrCode, Settings } from "lucide-react";
+
+function LogoMark({ className }: { className?: string }) {
+  return <AudioLines className={`text-accent ${className ?? ""}`} strokeWidth={2.5} />;
+}
 
 export default function AdminLayout({
   children,
@@ -23,17 +27,13 @@ export default function AdminLayout({
           <Sidebar
             header={
               <div className="flex min-w-0 items-center gap-2.5 px-1">
-                <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
-                  <Music className="size-4.5" />
-                </div>
-                <span className="truncate text-sm font-semibold">Jukebox</span>
+                <LogoMark className="size-6 shrink-0" />
+                <span className="truncate text-sm font-semibold">TINI</span>
               </div>
             }
             collapsedHeader={
               <div className="flex w-full items-center justify-center">
-                <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
-                  <Music className="size-4.5" />
-                </div>
+                <LogoMark className="size-6" />
               </div>
             }
             footer={

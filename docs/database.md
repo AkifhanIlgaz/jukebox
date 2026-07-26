@@ -15,9 +15,11 @@
   name: "Kahve Diyarı",
   ownerId: ObjectId,             // → owners._id
   settings: {
-    roundIntervalMin: 10,        // tur aralığı (dk)
-    candidateCount: 5,           // tur başına rastgele aday şarkı sayısı
-    recentlyPlayedWindow: 20     // son N şarkı tekrar aday olamaz
+    roundIntervalMin: 10,             // tur aralığı (dk)
+    candidateCount: 5,                // tur başına rastgele aday şarkı sayısı
+    recentlyPlayedCooldownMin: 20     // şarkı son çalınışından bu kadar dk geçmeden
+                                       // tekrar aday/fallback olamaz (karar 2026-07-26,
+                                       // eski recentlyPlayedWindow sayısının yerine)
   },
   createdAt, updatedAt
 }
@@ -52,7 +54,8 @@
   channelName: "...",            // oEmbed'den (author_name)
   thumbnailUrl: "...",           // oEmbed'den (thumbnail_url)
   addedAt,
-  lastPlayedAt: ISODate | null   // "yakın zamanda çalındı" filtresi için
+  lastPlayedAt: ISODate | null   // cooldown filtresi için (karar 2026-07-26,
+                                 // Redis'teki sayı bazlı "recent" listenin yerine)
 }
 // NOT: durationSec YOK — oEmbed süre vermez, akış IFrame'in TRACK_ENDED
 // olayıyla yürüdüğü için gerekmez.

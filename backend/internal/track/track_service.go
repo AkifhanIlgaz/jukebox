@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/AkifhanIlgaz/jukebox/internal/youtube"
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -215,33 +216,32 @@ func (s *TrackService) GetTrackByYoutubeId(ctx context.Context, venueId bson.Obj
 	return &playlistTrack, nil
 }
 
-func (s *TrackService) RandomTrack(ctx context.Context, venueId bson.ObjectID, excludeYoutubeIds []string) (*PlaylistTrack, error) {
-	filter := bson.M{
-		"venue_id": venueId,
-		"youtube_id": bson.M{
-			"$nin": excludeYoutubeIds,
-		},
-	}
+// RandomTrack, venue playlist'inden rastgele bir şarkı döner. cooldownCutoff
+// verilirse (`time.Time`'ın zero olmayan hali) `last_played_at` bu zamandan
+// önce olan (veya hiç çalınmamış, last_played_at == nil) şarkılarla sınırlanır
+// — yani "son cooldownMin dakikada çalınmadı" filtresi.
+//
+// TODO (mantık burada yazılacak, bkz. 2026-07-26 sohbeti):
+//   - $match: venue_id + (last_played_at yok VEYA last_played_at < cooldownCutoff)
+//   - $sample size 1
+//   - Sonuç boşsa (cursor.Next false): playlist boş değilse ASLA
+//     ErrNoAvailableTrack dönme — cooldown filtresini yok sayıp
+//     last_played_at'a göre ascending (nil'ler önce) sıralı ilk kaydı (en eski
+//     çalınan / hiç çalınmamış) fallback olarak döndür. Bu, round'un aday
+//     seçimindeki "en eski çalınandan başlayarak gevşet" kuralıyla aynı mantık
+//     (decisions.md 2026-07-12) — playlist küçükken (ör. 5 şarkı, hepsi
+//     cooldown'da) hâlâ bir şarkı dönmesini garanti eder.
+//   - Playlist gerçekten boşsa (0 track) ErrNoAvailableTrack dönmeye devam et.
+func (s *TrackService) RandomTrack(ctx context.Context, venueId bson.ObjectID, cooldownCutoff time.Time) (*PlaylistTrack, error) {
+	panic("TODO: RandomTrack mantığı yazılacak")
+}
 
-	pipeline := mongo.Pipeline{
-		bson.D{{Key: "$match", Value: filter}},
-		bson.D{{Key: "$sample", Value: bson.D{{Key: "size", Value: 1}}}},
-	}
-
-	cursor, err := s.playlistsCollection.Aggregate(ctx, pipeline)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch random track: %w", err)
-	}
-	defer cursor.Close(ctx)
-
-	if !cursor.Next(ctx) {
-		return nil, ErrNoAvailableTrack
-	}
-
-	var playlistTrack PlaylistTrack
-	if err := cursor.Decode(&playlistTrack); err != nil {
-		return nil, fmt.Errorf("failed to decode random track: %w", err)
-	}
-
-	return &playlistTrack, nil
+// MarkPlayed, bir şarkı çalmaya başladığında last_played_at'ı günceller
+// (cooldown filtresi bu alana bakıyor — bkz. RandomTrack). Önceden Redis
+// recent-list'e LPUSH olarak yapılıyordu (bkz. decisions.md 2026-07-26).
+//
+// TODO: playlists koleksiyonunda {venue_id, youtube_id} filtresiyle
+// $set: {last_played_at: now} update'i yaz.
+func (s *TrackService) MarkPlayed(ctx context.Context, venueId bson.ObjectID, youtubeId string) error {
+	panic("TODO: MarkPlayed mantığı yazılacak")
 }

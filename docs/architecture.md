@@ -86,7 +86,7 @@ IFrame'li sayfamız; v2'de Chrome extension aynı protokolle ikinci istemci olab
   adayı. Slug mekan adından otomatik türetilir. Register bu iterasyonda yok (hesaplar
   elle açılır); bir mekanın birden fazla admin'i olabilir. Şifre sıfırlama MVP'de yok
   (mail altyapısı yok).
-- **QR:** statik, `jukebox.app/v/{slug}` URL'ini taşır. Dönen QR altyapısı v2.
+- **QR:** statik, `tini.app/v/{slug}` URL'ini taşır. Dönen QR altyapısı v2.
 
 ## Deploy
 

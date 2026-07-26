@@ -5,9 +5,9 @@ import "time"
 // Varsayılan tur ayarları (bkz. CLAUDE.md — tur süresi/aday sayısı/tekrar
 // filtresi varsayılanları).
 const (
-	defaultRoundIntervalMin     = 10
-	defaultCandidateCount       = 5
-	defaultRecentlyPlayedWindow = 20
+	defaultRoundIntervalMin          = 10
+	defaultCandidateCount            = 5
+	defaultRecentlyPlayedCooldownMin = 20
 )
 
 type CreateVenueRequest struct {
@@ -31,9 +31,9 @@ func (r *CreateVenueRequest) ToVenue() *Venue {
 		Name:    r.Name,
 		LogoURL: r.LogoURL,
 		Settings: VenueSettings{
-			RoundIntervalMin:     defaultRoundIntervalMin,
-			CandidateCount:       defaultCandidateCount,
-			RecentlyPlayedWindow: defaultRecentlyPlayedWindow,
+			RoundIntervalMin:          defaultRoundIntervalMin,
+			CandidateCount:            defaultCandidateCount,
+			RecentlyPlayedCooldownMin: defaultRecentlyPlayedCooldownMin,
 		},
 		CreatedAt: now,
 		UpdatedAt: now,

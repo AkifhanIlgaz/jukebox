@@ -55,3 +55,13 @@ func (s *VenueService) CreateVenue(ctx context.Context, req CreateVenueRequest) 
 		return venue, nil
 	}
 }
+
+// GetByID, queue/round servislerinin cooldown/tur ayarları gibi
+// venue.settings alanlarına erişmesi için kullanılır.
+//
+// TODO: venuesCollection.FindOne({_id: venueId}) ile çek, bulunamazsa uygun
+// bir hata dön (bkz. ErrVenueNotFound benzeri bir tanım gerekebilir,
+// venue_errors.go).
+func (s *VenueService) GetByID(ctx context.Context, venueId bson.ObjectID) (*Venue, error) {
+	panic("TODO: GetByID mantığı yazılacak")
+}
