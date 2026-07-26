@@ -1,6 +1,10 @@
 package auth
 
-import "github.com/gofiber/fiber/v3"
+import (
+	"errors"
+
+	"github.com/gofiber/fiber/v3"
+)
 
 type AuthHandler struct {
 	service      *AuthService
@@ -26,11 +30,17 @@ func (h *AuthHandler) Login(ctx fiber.Ctx) error {
 	}
 
 	if err := req.Validate(); err != nil {
+		if errors.Is(err, ErrUsernameRequired) || errors.Is(err, ErrPasswordRequired) {
+			return fiber.NewError(fiber.StatusBadRequest, err.Error())
+		}
 		return err
 	}
 
 	token, err := h.service.Login(ctx.Context(), req)
 	if err != nil {
+		if errors.Is(err, ErrInvalidCredentials) {
+			return fiber.NewError(fiber.StatusUnauthorized, err.Error())
+		}
 		return err
 	}
 

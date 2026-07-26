@@ -1,22 +1,24 @@
 "use client";
 
-import { Button, Table, Tooltip } from "@heroui/react";
+import { Button, Spinner, Table, Tooltip } from "@heroui/react";
 import { ListPlus, Trash2 } from "lucide-react";
 import Image from "next/image";
 
-import { useQueue } from "@/features/admin/context/QueueContext";
-import { useVideoInfo } from "@/features/admin/hooks/useVideoInfo";
-
 export function PlaylistTableRow({
   youtubeId,
-  onRemove,
+  title,
+  channel,
+  onAddToQueue,
+  onDelete,
+  isDeleting,
 }: {
   youtubeId: string;
-  onRemove: () => void;
+  title: string;
+  channel: string;
+  onAddToQueue: () => void;
+  onDelete: () => void;
+  isDeleting?: boolean;
 }) {
-  const { title, channel } = useVideoInfo(youtubeId);
-  const { addToQueue } = useQueue();
-
   return (
     <Table.Row>
       <Table.Cell>
@@ -24,25 +26,18 @@ export function PlaylistTableRow({
           <div className="relative size-10 shrink-0 overflow-hidden rounded-md bg-surface-tertiary">
             <Image
               src={`https://img.youtube.com/vi/${youtubeId}/mqdefault.jpg`}
-              alt={title ?? ""}
+              alt={title}
               fill
               className="object-cover"
               sizes="40px"
             />
           </div>
           <div className="min-w-0">
-            <div className="truncate text-sm font-medium">
-              {title ?? (
-                <span className="inline-block h-3.5 w-40 animate-pulse rounded bg-surface-tertiary" />
-              )}
-            </div>
+            <div className="truncate text-sm font-medium">{title}</div>
           </div>
         </div>
       </Table.Cell>
-      <Table.Cell className="text-sm text-muted">
-        {channel ?? <span className="inline-block h-3.5 w-24 animate-pulse rounded bg-surface-tertiary" />}
-      </Table.Cell>
-      <Table.Cell className="font-mono text-xs text-muted">{youtubeId}</Table.Cell>
+      <Table.Cell className="text-sm font-semibold">{channel}</Table.Cell>
       <Table.Cell className="text-end">
         <div className="flex items-center justify-end gap-1">
           <Tooltip delay={0}>
@@ -51,7 +46,7 @@ export function PlaylistTableRow({
                 isIconOnly
                 size="sm"
                 variant="secondary"
-                onPress={() => addToQueue(youtubeId)}
+                onPress={onAddToQueue}
               >
                 <ListPlus className="size-4" />
               </Button>
@@ -66,8 +61,20 @@ export function PlaylistTableRow({
           </Tooltip>
           <Tooltip delay={0}>
             <Tooltip.Trigger aria-label="Şarkıyı kaldır">
-              <Button isIconOnly size="sm" variant="danger-soft" onPress={onRemove}>
-                <Trash2 className="size-4" />
+              <Button
+                isIconOnly
+                isPending={isDeleting}
+                size="sm"
+                variant="danger-soft"
+                onPress={onDelete}
+              >
+                {({ isPending }) =>
+                  isPending ? (
+                    <Spinner color="current" size="sm" />
+                  ) : (
+                    <Trash2 className="size-4" />
+                  )
+                }
               </Button>
             </Tooltip.Trigger>
             <Tooltip.Content showArrow placement="top">

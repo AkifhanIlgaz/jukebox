@@ -1,9 +1,21 @@
 import axios, { AxiosError, type InternalAxiosRequestConfig } from "axios";
 
+const GENERIC_ERROR_MESSAGE = "Beklenmeyen bir hata oluştu. Lütfen tekrar deneyin.";
+
 export const apiClient = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL,
   withCredentials: true,
 });
+
+export function getErrorMessage(error: unknown): string {
+  if (axios.isAxiosError(error)) {
+    const message = error.response?.data?.message;
+    if (typeof message === "string" && message.length > 0) {
+      return message;
+    }
+  }
+  return GENERIC_ERROR_MESSAGE;
+}
 
 let accessToken: string | null = null;
 

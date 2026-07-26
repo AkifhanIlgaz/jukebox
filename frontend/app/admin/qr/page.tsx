@@ -7,10 +7,10 @@ import { useState } from "react";
 import { NowPlayingCard } from "@/features/admin/components/NowPlayingCard";
 import { QueueItem } from "@/features/admin/components/QueueItem";
 import { useQueue } from "@/features/admin/context/QueueContext";
-import { extractYouTubeId } from "@/features/admin/lib/youtube";
+import { extractYouTubeId } from "@/lib/youtube";
 
 export default function AdminQrPage() {
-  const { nowPlayingId, queue, addToQueue, playFromQueue, handleEnded } = useQueue();
+  const { queue, addToQueue, playFromQueue } = useQueue();
   const [inputValue, setInputValue] = useState("");
   const [inputError, setInputError] = useState<string | null>(null);
 
@@ -32,7 +32,7 @@ export default function AdminQrPage() {
     <div className="flex w-full flex-col gap-4 p-8">
       <h1 className="text-2xl font-semibold tracking-tight">QR Kod</h1>
 
-      <NowPlayingCard youtubeId={nowPlayingId} onEnded={handleEnded} />
+      <NowPlayingCard />
 
       <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[1fr_1.2fr]">
         <Card className="px-5.5 py-5">

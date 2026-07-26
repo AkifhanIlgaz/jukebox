@@ -4,24 +4,12 @@ import { Button, Card, Slider } from "@heroui/react";
 import { ListMusic, Pause, Play, Volume2, VolumeX } from "lucide-react";
 import Image from "next/image";
 
-import { useYouTubePlayer } from "@/features/admin/hooks/useYouTubePlayer";
+import { useQueue } from "@/features/admin/context/QueueContext";
+import { formatDuration } from "@/lib/format";
 
-function formatDuration(totalSeconds: number) {
-  const safeSeconds = Number.isFinite(totalSeconds) ? Math.max(totalSeconds, 0) : 0;
-  const minutes = Math.floor(safeSeconds / 60);
-  const seconds = Math.floor(safeSeconds % 60);
-  return `${minutes}:${String(seconds).padStart(2, "0")}`;
-}
-
-export function NowPlayingCard({
-  youtubeId,
-  onEnded,
-}: {
-  youtubeId: string | null;
-  onEnded?: () => void;
-}) {
+export function NowPlayingCard() {
   const {
-    mountRef,
+    nowPlayingId,
     isPlaying,
     isMuted,
     currentTime,
@@ -32,9 +20,9 @@ export function NowPlayingCard({
     handleSeekEnd,
     togglePlayback,
     toggleMute,
-  } = useYouTubePlayer(youtubeId, { onEnded });
+  } = useQueue();
 
-  if (!youtubeId) {
+  if (!nowPlayingId) {
     return (
       <Card className="flex flex-col items-center justify-center gap-2 px-5.5 py-8 text-center">
         <ListMusic className="size-8 text-muted" />
@@ -46,10 +34,9 @@ export function NowPlayingCard({
 
   return (
     <Card className="flex flex-row flex-wrap items-end justify-center gap-4.5 px-5.5 py-4.5">
-      <div ref={mountRef} className="hidden" />
       <div className="relative size-18 shrink-0 overflow-hidden rounded-xl bg-surface-tertiary">
         <Image
-          src={`https://img.youtube.com/vi/${youtubeId}/mqdefault.jpg`}
+          src={`https://img.youtube.com/vi/${nowPlayingId}/mqdefault.jpg`}
           loading="eager"
           alt={title ?? ""}
           fill

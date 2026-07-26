@@ -4,7 +4,7 @@ import { Button } from "@heroui/react";
 import { Play } from "lucide-react";
 import Image from "next/image";
 
-import { useVideoInfo } from "@/features/admin/hooks/useVideoInfo";
+import { useVideoInfo } from "@/features/playlist/hooks/useVideoInfo";
 
 export function QueueItem({
   index,

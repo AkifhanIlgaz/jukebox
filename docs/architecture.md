@@ -13,10 +13,10 @@ oy verir; kazanan şarkı mekandaki player'da otomatik çalar.
 
 ```
                                    ┌─────────────────────────┐
- Müşteri telefonu                  │  Go Backend (tek servis)│
+ Müşteri telefonu                  │  Go Backend (tek servis)│──── MongoDB
  (Next.js /v/[slug])  ── WS/REST ──►  - REST API             │
-                                   │  - WebSocket hub        │──── MongoDB
- Mekan bilgisayarı                 │  - Tur zamanlayıcısı    │
+                                   │  - WebSocket hub        │──── Redis
+ Mekan bilgisayarı                 │  - Tur zamanlayıcısı    │     (oy sayacı + kuyruk)
  (Next.js /player)    ── WS ───────►  - (round scheduler)    │
                                    └─────────────────────────┘
  Mekan sahibi paneli
@@ -26,6 +26,8 @@ oy verir; kazanan şarkı mekandaki player'da otomatik çalar.
 - **Go Backend** — tek binary (`cmd/api`). REST (playlist/mekan yönetimi, ilk sayfa
   yüklemeleri) + WebSocket hub (canlı oylar, tur olayları, player komutları) +
   tur yöneticisi (şarkı başlangıcında tur açan, süresi dolunca kapatan goroutine).
+- **Redis** — tur içi canlı oy sayacı (sorted set) ve çalma kuyruğu (list); backend
+  ile aynı VPS'te, AOF persistence açık (karar 2026-07-25).
 - **Müşteri sayfası** (`/v/[slug]`) — QR'dan açılır. Aktif turdaki aday şarkıları ve
   canlı oy sayılarını gösterir, oy gönderir. Cihaz çerezi ile turda 1 oy.
 - **Player sayfası** (`/player`) — mekan bilgisayarında sürekli açık. YouTube IFrame
@@ -38,15 +40,18 @@ oy verir; kazanan şarkı mekandaki player'da otomatik çalar.
 1. Bir şarkı çalmaya başladığında, açık tur yoksa yeni tur açılır: playlist'ten
    **rastgele N aday** seçilir (varsayılan 5; son 20 çalınan hariç, ikisi de mekan
    ayarı), WS ile `ROUND_STARTED` yayınlanır. Tur süresi varsayılan 10 dk (mekan ayarı).
-2. Müşteriler oy verir → backend cihaz başına 1 oy kuralını uygular, sayaçları
-   atomik artırır (`$inc`), `VOTE_UPDATE` yayınlar.
-3. Süre dolunca `ROUND_ENDED`: kazanan şarkı mekanın çalma kuyruğuna eklenir.
-   Beraberlikte eşitler arasından rastgele seçilir; hiç oy yoksa kazanan olmaz.
+2. Müşteriler oy verir → backend cihaz başına 1 oy kuralını Mongo `votes` unique
+   index'iyle uygular, sayacı Redis sorted set'te (`round:{roundId}:votes`) `ZINCRBY`
+   ile atomik artırır, `VOTE_UPDATE` yayınlar.
+3. Süre dolunca `ROUND_ENDED`: Redis sorted set'ten kazanan okunur (beraberlikte
+   eşitler arasından rastgele seçilir; hiç oy yoksa kazanan olmaz), final skorlar
+   kalıcı kayıt için `rounds.candidates[].votes`'a yazılır ve sorted set silinir.
+   Kazanan varsa Redis kuyruğuna (`venue:{venueId}:queue`) `RPUSH` ile eklenir.
    Yeni tur hemen AÇILMAZ — sıradaki şarkı başlayana kadar oylama arası verilir.
-4. Player'daki şarkı bitince (`TRACK_ENDED`) backend kuyruktan sıradakini gönderir
-   (`PLAY_TRACK`). **Kuyruk boşsa playlist'ten rastgele şarkı çalınır (fallback).**
-   Bu şarkı başlayınca 1. adıma dönülür: kapanmış turdan sonraki ilk şarkı
-   başlangıcı yeni turu açar.
+4. Player'daki şarkı bitince (`TRACK_ENDED`) backend Redis kuyruğundan `LPOP` ile
+   sıradakini gönderir (`PLAY_TRACK`). **Kuyruk boşsa playlist'ten rastgele şarkı
+   çalınır (fallback).** Bu şarkı başlayınca 1. adıma dönülür: kapanmış turdan
+   sonraki ilk şarkı başlangıcı yeni turu açar.
 
 Notlar:
 - Tur süresi şarkılardan uzun olduğu için bir tur boyunca birden fazla şarkı
@@ -86,7 +91,8 @@ IFrame'li sayfamız; v2'de Chrome extension aynı protokolle ikinci istemci olab
 ## Deploy
 
 - **Frontend:** Vercel (Next.js doğal ortamı, CDN, preview deploy'lar bedava).
-- **Backend + MongoDB:** tek VPS (Go binary + Mongo; docker-compose veya systemd).
+- **Backend + MongoDB + Redis:** tek VPS (Go binary + Mongo + Redis; docker-compose
+  veya systemd). Redis AOF persistence açık (karar 2026-07-25).
 - **Cross-domain kuralı:** İki ortam ayrı olduğu için aynı kök domain kullanılacak —
   örn. `app.X.com` (Vercel) + `api.X.com` (VPS). Cihaz çerezi `Domain=.X.com` ile
   yazılır ki hem sayfa hem API görebilsin; CORS `app.X.com`'a izinli, WS bağlantısı

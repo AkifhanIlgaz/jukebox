@@ -13,14 +13,24 @@ const (
 	localsVenueID = "venueID"
 )
 
-func Auth(jwtSecret string) fiber.Handler {
+type AuthMiddleware struct {
+	jwtSecret string
+}
+
+func NewAuthMiddleware(jwtSecret string) *AuthMiddleware {
+	return &AuthMiddleware{
+		jwtSecret: jwtSecret,
+	}
+}
+
+func (mw *AuthMiddleware) Auth() fiber.Handler {
 	return func(c fiber.Ctx) error {
 		tokenString := c.Cookies(auth.CookieName)
 		if tokenString == "" {
 			return fiber.NewError(fiber.StatusUnauthorized, "giriş gerekli")
 		}
 
-		claims, err := auth.ParseToken(tokenString, jwtSecret)
+		claims, err := auth.ParseToken(tokenString, mw.jwtSecret)
 		if err != nil {
 			return fiber.NewError(fiber.StatusUnauthorized, "oturum geçersiz")
 		}

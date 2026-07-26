@@ -2,6 +2,8 @@
 
 import { createContext, useCallback, useContext, useState } from "react";
 
+import { useYouTubePlayer } from "@/features/admin/hooks/useYouTubePlayer";
+
 type QueueEntry = { key: string; videoId: string };
 
 type QueueContextValue = {
@@ -9,7 +11,17 @@ type QueueContextValue = {
   queue: QueueEntry[];
   addToQueue: (videoId: string) => void;
   playFromQueue: (key: string) => void;
-  handleEnded: () => void;
+  mountRef: ReturnType<typeof useYouTubePlayer>["mountRef"];
+  isPlaying: boolean;
+  isMuted: boolean;
+  currentTime: number;
+  duration: number;
+  title: string | null;
+  channel: string | null;
+  handleSeek: (value: number) => void;
+  handleSeekEnd: (value: number) => void;
+  togglePlayback: () => void;
+  toggleMute: () => void;
 };
 
 const QueueContext = createContext<QueueContextValue | null>(null);
@@ -44,8 +56,29 @@ export function QueueProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  const player = useYouTubePlayer(nowPlayingId, { onEnded: handleEnded });
+
   return (
-    <QueueContext.Provider value={{ nowPlayingId, queue, addToQueue, playFromQueue, handleEnded }}>
+    <QueueContext.Provider
+      value={{
+        nowPlayingId,
+        queue,
+        addToQueue,
+        playFromQueue,
+        mountRef: player.mountRef,
+        isPlaying: player.isPlaying,
+        isMuted: player.isMuted,
+        currentTime: player.currentTime,
+        duration: player.duration,
+        title: player.title,
+        channel: player.channel,
+        handleSeek: player.handleSeek,
+        handleSeekEnd: player.handleSeekEnd,
+        togglePlayback: player.togglePlayback,
+        toggleMute: player.toggleMute,
+      }}
+    >
+      <div ref={player.mountRef} className="hidden" />
       {children}
     </QueueContext.Provider>
   );

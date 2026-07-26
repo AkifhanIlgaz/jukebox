@@ -5,6 +5,35 @@ Bir karar değişirse silinmez; üstüne "İPTAL/REVİZE (tarih)" notu düşül�
 
 ---
 
+## 2026-07-25 — Canlı oy sayacı ve kuyruk: Redis (Mongo değil)
+
+**Karar:** Tur içi oy sayaçları Redis **sorted set**'te tutulur (`round:{roundId}:votes`,
+member=trackId, score=oy sayısı; `ZINCRBY` ile atomik artır, `ZREVRANGE` ile sıralı
+okuma). Çalma kuyruğu Mongo `queue` koleksiyonu yerine Redis **list**'te tutulur
+(`venue:{venueId}:queue`, `RPUSH` ile ekle, `LPOP` ile sıradakini al). Redis, backend
+ile aynı VPS'te çalışır; **AOF persistence açık** (restart'ta veri kaybını önlemek için).
+
+Tur kapanınca (`ROUND_ENDED`) Redis'teki final skorlar `rounds.candidates[].votes`
+alanına yazılıp sorted set silinir — round geçmişi ve istatistikler için kalıcı kayıt
+Mongo'da kalır. "Cihaz turda 1 oy" kuralı hâlâ Mongo `votes` koleksiyonundaki
+`{ roundId, deviceId }` unique index ile garanti edilir (bu, dedupe/audit amaçlı,
+düşük hacimli — Redis'e taşınmadı).
+
+**Neden:** Kullanıcı tercihi. Canlı oy sıralaması ve kuyruktan çekme sık ve düşük
+gecikmeli işlemler; Redis'in atomik `ZINCRBY`/`RPUSH`/`LPOP`'u Mongo'nun `$inc` +
+sort'undan daha doğal bir fit. RabbitMQ (kuyruk için) değerlendirilip elendi: mekan
+başına tek üretici/tek tüketicili basit sıralı liste, message broker'ın çözdüğü hiçbir
+problem (çoklu worker, retry, dead-letter) yok — gereksiz ops yükü.
+
+**Sonuçlar:**
+- `queue` koleksiyonu KALKAR (bkz. database.md revizyonu). `playedAt` ile gelen
+  "çalınanlar geçmişi" bonusu da kalkıyor; "son N çalınan" filtresi zaten
+  `tracks.lastPlayedAt` alanına bakıyor, bundan etkilenmiyor.
+- Redis restart'ında (AOF'a rağmen bir pencerede) aktif tur oyları veya kuyruk
+  kaybolabilir — kafe ölçeğinde kabul edilebilir risk (en kötü ihtimalle bir sonraki
+  fallback şarkı çalar / tur sıfırdan başlar).
+- Deploy: Redis backend ile aynı VPS'te (docker-compose/systemd), Mongo'nun yanında.
+
 ## 2026-07-24 — Mekan sahibi auth: JWT (httpOnly cookie), süresiz token, sadece login/logout
 
 **Karar:** Mekan sahibi girişi username+şifre (email değil) ile yapılır; `owners`

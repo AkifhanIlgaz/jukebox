@@ -6,10 +6,6 @@ function cover(hue: number) {
   return `linear-gradient(135deg, oklch(66% 0.05 ${hue}), oklch(40% 0.06 ${hue}))`;
 }
 
-const nowPlaying = {
-  youtubeId: "CeTjSfAFcFQ",
-};
-
 const candidates = [
   { id: 1, title: "Bu Ev Bizim", channel: "Adamlar", votes: 14, hue: 60 },
   { id: 2, title: "Gesi Bağları", channel: "Anatolian Sessions", votes: 11, hue: 150 },
@@ -48,7 +44,7 @@ export default function AdminOverviewPage() {
         </span>
       </div>
 
-      <NowPlayingCard youtubeId={nowPlaying.youtubeId} />
+      <NowPlayingCard />
 
 
       <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[1.55fr_1fr]">

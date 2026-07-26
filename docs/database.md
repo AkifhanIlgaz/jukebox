@@ -67,14 +67,17 @@
   venueId: ObjectId,
   status: "open" | "closed",
   startsAt, endsAt,
-  candidates: [                  // aday şarkılar + oy sayaçları gömülü
+  candidates: [                  // aday şarkılar + FİNAL oy sayaçları gömülü
     { trackId: ObjectId, youtubeVideoId: "...", title: "...", votes: 12 },
     { trackId: ObjectId, ..., votes: 7 }
   ],
   winnerTrackId: ObjectId | null // tur kapanınca yazılır
 }
 // index: { venueId: 1, status: 1 }, { venueId: 1, startsAt: -1 }
-// Oy artırma: candidates.$.votes üzerinde atomik $inc
+// KARAR (2026-07-25): tur AÇIKKEN canlı sayaç Redis sorted set'te tutulur
+// (round:{roundId}:votes, ZINCRBY). Tur kapanınca final skorlar buraya
+// (candidates[].votes) yazılır, sorted set silinir — bu alan sadece kalıcı
+// kayıt/istatistik için, canlı sayaç değil.
 ```
 
 ### votes — kim hangi turda oy verdi (tekrar oy engeli)
@@ -90,21 +93,14 @@
 // index: { roundId: 1, deviceId: 1 } unique  ← turda 1 oy garantisi burada
 ```
 
-### queue — çalma kuyruğu
+### queue — KALKTI (2026-07-25), Redis'e taşındı
 
-```js
-{
-  _id: ObjectId,
-  venueId: ObjectId,
-  trackId: ObjectId,
-  source: "vote" | "fallback",   // oylamadan mı rastgele fallback mi
-  enqueuedAt,
-  playedAt: ISODate | null       // null = henüz çalınmadı
-}
-// index: { venueId: 1, playedAt: 1, enqueuedAt: 1 }
-// KARAR: ayrı koleksiyon (gömülü dizi değil) — playedAt sayesinde "çalınanlar
-// geçmişi" bedavaya çıkar, eşzamanlı güncellemeler basit.
-```
+**REVİZE (2026-07-25):** Çalma kuyruğu artık bu Mongo koleksiyonunda değil, Redis
+list'te tutulur: `venue:{venueId}:queue` (`RPUSH` ile ekle, `LPOP` ile sıradakini al).
+Sebep ve sonuçlar için bkz. decisions.md 2026-07-25. `playedAt` ile gelen "çalınanlar
+geçmişi" bonusu kalktı — "son N çalınan" filtresi zaten `tracks.lastPlayedAt`'a
+bakıyor, bundan etkilenmiyor; tam kuyruk geçmişi ihtiyacı çıkarsa v2'de yeniden
+değerlendirilir.
 
 ## Tasarım notları
 
@@ -117,7 +113,7 @@
 
 ## Kararlaştırıldı (2026-07-11, detay: decisions.md)
 
-- `queue`: ayrı koleksiyon ✓
+- `queue`: ayrı koleksiyon ✓ → REVİZE 2026-07-25: Redis list'e taşındı, koleksiyon kalktı
 - `tracks`: mekan başına tek havuz; çoklu playlist v2 ✓
 - Metadata: YouTube oEmbed (link yapıştırma); Data API v2 ✓
 - Tur geçmişi: TTL yok, silinmez (istatistik için) ✓

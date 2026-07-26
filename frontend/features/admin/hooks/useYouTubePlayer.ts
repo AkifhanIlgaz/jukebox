@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import { youtubeApi } from "@/features/admin/api/youtube-api";
+import { youtubeApi } from "@/lib/youtube-api";
 
 type YouTubePlayer = {
   playVideo: () => void;

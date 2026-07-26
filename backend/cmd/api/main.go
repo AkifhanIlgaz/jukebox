@@ -1,16 +1,22 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"log"
 
 	"github.com/AkifhanIlgaz/jukebox/internal/auth"
 	"github.com/AkifhanIlgaz/jukebox/internal/config"
 	"github.com/AkifhanIlgaz/jukebox/internal/db"
 	"github.com/AkifhanIlgaz/jukebox/internal/middleware"
+	"github.com/AkifhanIlgaz/jukebox/internal/track"
+	"github.com/AkifhanIlgaz/jukebox/internal/youtube"
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/cors"
 	"github.com/gofiber/fiber/v3/middleware/logger"
 )
+
+const genericErrorMessage = "Beklenmeyen bir hata oluştu. Lütfen tekrar deneyin."
 
 func main() {
 	cfg := config.Load()
@@ -20,10 +26,36 @@ func main() {
 		log.Fatal(err)
 	}
 
+	defer database.Client().Disconnect(context.Background())
+
+	ytClient := youtube.NewClient()
+
+	authMiddleware := middleware.NewAuthMiddleware(cfg.JWTSecret)
 	authService := auth.NewAuthService(database, cfg.JWTSecret)
 	authHandler := auth.NewAuthHandler(authService, cfg.CookieDomain)
 
-	app := fiber.New()
+	trackService := track.NewTrackService(database, ytClient)
+	trackHandler := track.NewTrackHandler(trackService, authMiddleware)
+
+	app := fiber.New(fiber.Config{
+		ErrorHandler: func(c fiber.Ctx, err error) error {
+			code := fiber.StatusInternalServerError
+			message := genericErrorMessage
+
+			var fiberErr *fiber.Error
+			if errors.As(err, &fiberErr) {
+				code = fiberErr.Code
+				message = fiberErr.Message
+			} else {
+				log.Println(err)
+			}
+
+			return c.Status(code).JSON(fiber.Map{
+				"status":  "error",
+				"message": message,
+			})
+		},
+	})
 
 	app.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{cfg.AllowedOrigin},
@@ -37,6 +69,7 @@ func main() {
 	})
 
 	authHandler.RegisterRoutes(app)
+	trackHandler.RegisterRoutes(app)
 
 	log.Fatal(app.Listen(":" + cfg.Port))
 }
