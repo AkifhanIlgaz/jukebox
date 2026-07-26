@@ -9,11 +9,7 @@ import { SidebarUserMenu } from "@/components/ui/app-layout/SidebarUserMenu";
 import { SidebarThemeToggle } from "@/components/ui/app-layout/SidebarThemeToggle";
 import { QueueProvider } from "@/features/admin/context/QueueContext";
 import { NowPlayingIndicator } from "@/features/admin/components/NowPlayingIndicator";
-import { AudioLines, LayoutDashboard, ListMusic, QrCode, Settings } from "lucide-react";
-
-function LogoMark({ className }: { className?: string }) {
-  return <AudioLines className={`text-accent ${className ?? ""}`} strokeWidth={2.5} />;
-}
+import { LayoutDashboard, ListMusic, QrCode, Settings } from "lucide-react";
 
 export default function AdminLayout({
   children,
@@ -27,13 +23,17 @@ export default function AdminLayout({
           <Sidebar
             header={
               <div className="flex min-w-0 items-center gap-2.5 px-1">
-                <LogoMark className="size-6 shrink-0" />
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/logo.svg" alt="" className="h-6 w-auto shrink-0" />
                 <span className="truncate text-sm font-semibold">TINI</span>
               </div>
             }
             collapsedHeader={
-              <div className="flex w-full items-center justify-center">
-                <LogoMark className="size-6" />
+              <div className="flex w-full items-center justify-center overflow-hidden">
+                <div className="size-8 shrink-0 overflow-hidden rounded-lg">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/logo.svg" alt="TINI" className="h-full w-full scale-150 object-cover" />
+                </div>
               </div>
             }
             footer={
