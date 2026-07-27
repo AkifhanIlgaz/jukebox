@@ -10,6 +10,10 @@ class AuthApi extends BaseApi {
   async login(values: LoginFormValues) {
     return this.post( "/login", loginResponseSchema, values);
   }
+
+  async logout() {
+    return this.post("/logout", loginResponseSchema);
+  }
 }
 
 export const authApi = new AuthApi();

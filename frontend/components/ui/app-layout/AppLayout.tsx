@@ -42,13 +42,13 @@ function DesktopSidebar({ sidebar }: { sidebar: React.ReactNode }) {
 
 function AppLayoutInner({ sidebar, navbar, children }: AppLayoutProps) {
   return (
-    <div className="flex min-h-dvh w-full bg-background">
+    <div className="flex h-dvh w-full overflow-hidden bg-background">
       <DesktopSidebar sidebar={sidebar} />
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-w-0 min-h-0 flex-1 flex-col">
         <header className="flex h-14 shrink-0 items-center border-b border-border px-4">
           {navbar}
         </header>
-        <main className="flex-1 overflow-y-auto">{children}</main>
+        <main className="min-h-0 flex-1 overflow-y-auto">{children}</main>
       </div>
       <MobileSidebar sidebar={sidebar} />
     </div>

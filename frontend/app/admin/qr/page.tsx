@@ -1,5 +1,6 @@
 "use client";
 
+import { PageHeader } from "@/components/ui/PageHeader";
 import { NowPlayingCard } from "@/features/admin/components/NowPlayingCard";
 import { AddToQueueForm } from "@/features/queue/components/AddToQueueForm";
 import { QueueList } from "@/features/queue/components/QueueList";
@@ -8,7 +9,10 @@ import { ActiveRoundCard } from "@/features/round/components/ActiveRoundCard";
 export default function AdminQrPage() {
   return (
     <div className="flex w-full flex-col gap-4 p-8">
-      <h1 className="text-2xl font-semibold tracking-tight">QR Kod</h1>
+      <PageHeader
+        title="QR Kod"
+        description="Aktif oylama turunu ve çalma kuyruğunu buradan takip et, kuyruğa manuel şarkı ekle."
+      />
 
       <NowPlayingCard />
 

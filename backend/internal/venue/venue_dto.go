@@ -41,3 +41,26 @@ func (r *CreateVenueRequest) ToVenue() *Venue {
 		UpdatedAt: now,
 	}
 }
+
+// UpdateVenueRequest, admin panelden mekan adı/logosu ve tur ayarlarının
+// güncellenmesi için kullanılır. Slug değişmez (bkz. venue_slug.go).
+type UpdateVenueRequest struct {
+	Name     string        `json:"name"`
+	LogoURL  string        `json:"logoUrl"`
+	Settings VenueSettings `json:"settings"`
+}
+
+func (r *UpdateVenueRequest) Validate() error {
+	if r.Name == "" {
+		return ErrNameRequired
+	}
+
+	if r.Settings.RoundIntervalMin <= 0 ||
+		r.Settings.CandidateCount <= 0 ||
+		r.Settings.RecentlyPlayedCooldownMin <= 0 ||
+		r.Settings.CandidateCooldownMin <= 0 {
+		return ErrInvalidSettings
+	}
+
+	return nil
+}

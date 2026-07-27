@@ -5,6 +5,7 @@ import { Card, EmptyState, Label, ListBox, Pagination, Select, Spinner, Table } 
 import { ListMusic } from "lucide-react";
 import { useState } from "react";
 
+import { AddSongForm } from "@/features/playlist/components/AddSongForm";
 import { PlaylistTableRow } from "@/features/playlist/components/PlaylistTableRow";
 import { useDeleteTrack } from "@/features/playlist/hooks/useDeleteTrack";
 import { useTracks } from "@/features/playlist/hooks/useTracks";
@@ -35,26 +36,29 @@ export function PlaylistTable() {
   return (
     <Card className="px-5.5 py-5">
       <div className="mb-3.5 flex items-center justify-between">
-        <div className="text-base font-semibold">Playlist ({total})</div>
-        <Select className="flex-row items-center gap-2" value={rowsPerPage} onChange={onRowsPerPageChange}>
-          <Label className="text-xs text-muted">Sayfa başına</Label>
-          <Select.Trigger className="w-30">
-            <Select.Value />
-            <Select.Indicator />
-          </Select.Trigger>
-          <Select.Popover>
-            <ListBox>
-              {ROWS_PER_PAGE_OPTIONS.map((option) => (
-                <ListBox.Item key={option} id={option} textValue={`${option}`}>
-                  {option} şarkı
-                  <ListBox.ItemIndicator />
-                </ListBox.Item>
-              ))}
-            </ListBox>
-          </Select.Popover>
-        </Select>
+        <div className="text-sm text-muted">{total} şarkı</div>
+        <div className="flex items-center gap-3">
+          <Select className="flex-row items-center gap-2" value={rowsPerPage} onChange={onRowsPerPageChange}>
+            <Label className="text-xs text-muted">Sayfa başına</Label>
+            <Select.Trigger className="w-30">
+              <Select.Value />
+              <Select.Indicator />
+            </Select.Trigger>
+            <Select.Popover>
+              <ListBox>
+                {ROWS_PER_PAGE_OPTIONS.map((option) => (
+                  <ListBox.Item key={option} id={option} textValue={`${option}`}>
+                    {option} şarkı
+                    <ListBox.ItemIndicator />
+                  </ListBox.Item>
+                ))}
+              </ListBox>
+            </Select.Popover>
+          </Select>
+          <AddSongForm />
+        </div>
       </div>
-      <Table>
+      <Table variant="secondary">
         <Table.ScrollContainer>
           <Table.Content aria-label="Playlist" className="min-w-150">
             <Table.Header>

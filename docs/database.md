@@ -38,13 +38,16 @@
   username: "kahvediyari",       // unique (email değil — karar 2026-07-24)
   passwordHash: "...",           // bcrypt
   venueId: ObjectId,             // → venues._id
+  role: "boss" | "admin",        // karar 2026-07-27
   createdAt
 }
 // index: { username: 1 } unique
-// NOT: register bu iterasyonda yok, hesaplar elle açılıyor. Bir venue'nin birden
-// fazla admin'i olabilecek şekilde tasarlandı (venueId her user'da var, 1:1
-// zorunluluğu yok) — mekan sahibi ileride yeni admin ekleyebilecek (bkz. decisions.md
-// 2026-07-24).
+// index: { venueId: 1, role: 1 } unique, partialFilterExpression: { role: "boss" }
+//   → mekan başına tam bir boss garantisi (admin dokümanlarını etkilemez)
+// NOT: register bu iterasyonda yok, hesaplar elle açılıyor. Boss elle DB'ye
+// açılır; admin hesapları boss tarafından panelden (POST /users) oluşturulur/
+// silinir (DELETE /users/:id, sadece role=admin hedefleyebilir). Bkz. decisions.md
+// 2026-07-24 ve 2026-07-27.
 ```
 
 ### tracks — mekanın şarkı havuzu (mekan başına TEK havuz)

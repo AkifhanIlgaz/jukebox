@@ -2,8 +2,13 @@ package round
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"log"
+	"math/rand"
 	"time"
 
+	"github.com/AkifhanIlgaz/jukebox/internal/queue"
 	"github.com/AkifhanIlgaz/jukebox/internal/track"
 	"github.com/AkifhanIlgaz/jukebox/internal/venue"
 	"github.com/redis/go-redis/v9"
@@ -22,9 +27,10 @@ type RoundService struct {
 	redisClient      *redis.Client
 	trackService     *track.TrackService
 	venueService     *venue.VenueService
+	queueService     *queue.QueueService
 }
 
-func NewRoundService(db *mongo.Database, redisClient *redis.Client, trackService *track.TrackService, venueService *venue.VenueService) *RoundService {
+func NewRoundService(db *mongo.Database, redisClient *redis.Client, trackService *track.TrackService, venueService *venue.VenueService, queueService *queue.QueueService) *RoundService {
 	roundsCollection := db.Collection(roundsCollectionName)
 
 	// { venue_id: 1, status: 1 } — "bu venue'de açık tur var mı" kontrolü
@@ -57,7 +63,41 @@ func NewRoundService(db *mongo.Database, redisClient *redis.Client, trackService
 		redisClient:      redisClient,
 		trackService:     trackService,
 		venueService:     venueService,
+		queueService:     queueService,
 	}
+}
+
+// scheduleFinish, bir round'un bitiş anında (endsAt) otomatik olarak
+// FinishRound'u tetikleyecek bir zamanlayıcı kurar. Zamanlayıcılar yalnızca
+// bellekte tutulur — sunucu yeniden başlarsa kaybolur (bilinen kısıt,
+// şimdilik kapsam dışı; kalıcı bir job scheduler'a geçiş ileride
+// değerlendirilebilir).
+func (s *RoundService) scheduleFinish(roundId bson.ObjectID, endsAt time.Time) {
+	time.AfterFunc(time.Until(endsAt), func() {
+		if err := s.FinishRound(context.Background(), roundId); err != nil {
+			log.Printf("round %s bitirilemedi: %v", roundId.Hex(), err)
+		}
+	})
+}
+
+// selectCandidates, venue'nin playlist'inden bir sonraki round için aday
+// şarkıları seçer (OpenRound ve FinishRound arasında paylaşılan mantık).
+func (s *RoundService) selectCandidates(ctx context.Context, venueId bson.ObjectID, venue *venue.Venue) ([]Candidate, []string, error) {
+	candidateCooldownCutoff := time.Now().Add(-time.Duration(venue.Settings.CandidateCooldownMin) * time.Minute)
+
+	playlistTracks, err := s.trackService.RandomCandidates(ctx, venueId, candidateCooldownCutoff, venue.Settings.CandidateCount)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	candidates := make([]Candidate, 0, len(playlistTracks))
+	youtubeIds := make([]string, 0, len(playlistTracks))
+	for _, playlistTrack := range playlistTracks {
+		candidates = append(candidates, CandidateFromPlaylistTrack(playlistTrack))
+		youtubeIds = append(youtubeIds, playlistTrack.YoutubeID)
+	}
+
+	return candidates, youtubeIds, nil
 }
 
 // OpenRound, venue için yeni bir oylama turu başlatır. Şimdilik admin
@@ -86,26 +126,18 @@ func (s *RoundService) OpenRound(ctx context.Context, venueId bson.ObjectID) (*R
 		return nil, err
 	}
 
-	candidateCooldownCutoff := time.Now().Add(-time.Duration(venue.Settings.CandidateCooldownMin) * time.Minute)
-
-	playlistTracks, err := s.trackService.RandomCandidates(ctx, venueId, candidateCooldownCutoff, venue.Settings.CandidateCount)
+	candidates, youtubeIds, err := s.selectCandidates(ctx, venueId, venue)
 	if err != nil {
 		return nil, err
 	}
 
-	if len(playlistTracks) < minCandidates {
+	if len(candidates) < minCandidates {
 		return nil, ErrNotEnoughTracks
-	}
-
-	candidates := make([]Candidate, 0, len(playlistTracks))
-	youtubeIds := make([]string, 0, len(playlistTracks))
-	for _, playlistTrack := range playlistTracks {
-		candidates = append(candidates, CandidateFromPlaylistTrack(playlistTrack))
-		youtubeIds = append(youtubeIds, playlistTrack.YoutubeID)
 	}
 
 	now := time.Now()
 	round := &Round{
+		ID:         bson.NewObjectID(),
 		VenueID:    venueId,
 		Status:     StatusOpen,
 		StartedAt:  now,
@@ -125,7 +157,20 @@ func (s *RoundService) OpenRound(ctx context.Context, venueId bson.ObjectID) (*R
 		return nil, err
 	}
 
+	s.scheduleFinish(round.ID, round.EndsAt)
+
 	return round, nil
+}
+
+// CloseRound, açık bir round'u süresi dolmadan manuel olarak kapatır:
+// kazanan seçmeden status'u closed yapar ve round'un redis oylarını siler.
+// scheduleFinish ile kurulmuş zamanlayıcıyı iptal etmek ve FinishRound'un bu
+// round'u tekrar işlemeye çalışmasını engellemek (status guard) burada ele
+// alınması gereken noktalar.
+//
+// TODO: implement edilecek (scaffold — bkz. CLAUDE.md, birlikte yazılacak).
+func (s *RoundService) CloseRound(ctx context.Context, venueId bson.ObjectID) (*Round, error) {
+	panic("not implemented")
 }
 
 func (s *RoundService) FindActiveRound(ctx context.Context, venueId bson.ObjectID) (*Round, error) {
@@ -144,4 +189,96 @@ func (s *RoundService) FindActiveRound(ctx context.Context, venueId bson.ObjectI
 	}
 
 	return &round, nil
+}
+
+// FinishRound, bir round'un süresi dolduğunda (OpenRound/FinishRound'un
+// kurduğu scheduleFinish zamanlayıcısı üzerinden) tetiklenir. Round'u
+// kapatır, kazananı hiç beklemeden kuyruğa ekler (böylece hemen çalmaya
+// başlar) ve arada boşluk bırakmadan bir sonraki round'u hemen açıp kendi
+// bitişini tetikleyecek zamanlayıcıya bağlar — döngü böyle kendi kendini
+// besleyerek sürer.
+//
+// NOT: WebSocket ile sonuç/round bilgisini client'lara gönderme kısmı bu
+// implementasyonda YOK (WS zaten decisions.md'de ertelenmiş durumda).
+func (s *RoundService) FinishRound(ctx context.Context, roundId bson.ObjectID) error {
+	var round Round
+	if err := s.roundsCollection.FindOne(ctx, bson.M{"_id": roundId}).Decode(&round); err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return ErrRoundNotFound
+		}
+		return fmt.Errorf("failed to fetch round: %w", err)
+	}
+
+	// Zamanlayıcı yanlışlıkla erken tetiklenirse (ör. yeniden başlatma
+	// sonrası çakışan bir zamanlayıcı) round'u bozmamak için guard.
+	if time.Now().Before(round.EndsAt) {
+		return nil
+	}
+
+	results, err := s.redisClient.ZRevRangeWithScores(ctx, votesKey(roundId), 0, -1).Result()
+	if err != nil {
+		return fmt.Errorf("failed to fetch round votes: %w", err)
+	}
+
+	voteCounts := make(map[string]int, len(results))
+	for _, result := range results {
+		if youtubeId, ok := result.Member.(string); ok {
+			voteCounts[youtubeId] = int(result.Score)
+		}
+	}
+
+	maxVotes := -1
+	var winners []string
+	for i := range round.Candidates {
+		votes := voteCounts[round.Candidates[i].YoutubeID]
+		round.Candidates[i].Votes = votes
+
+		switch {
+		case votes > maxVotes:
+			maxVotes = votes
+			winners = []string{round.Candidates[i].YoutubeID}
+		case votes == maxVotes:
+			winners = append(winners, round.Candidates[i].YoutubeID)
+		}
+	}
+
+	// Beraberlik: rastgele (bkz. decisions.md 2026-07-12). Round'da hiç
+	// oy yoksa (hepsi 0) tüm adaylar "berabere" sayılır, yine rastgele
+	// seçilir.
+	winnerYoutubeId := winners[rand.Intn(len(winners))]
+
+	if _, err := s.roundsCollection.UpdateOne(ctx, bson.M{"_id": roundId}, bson.M{
+		"$set": bson.M{
+			"status":            StatusClosed,
+			"candidates":        round.Candidates,
+			"winner_youtube_id": winnerYoutubeId,
+		},
+	}); err != nil {
+		return fmt.Errorf("failed to close round: %w", err)
+	}
+
+	if err := s.queueService.Enqueue(ctx, round.VenueID, winnerYoutubeId); err != nil && !errors.Is(err, queue.ErrTrackAlreadyQueued) {
+		return fmt.Errorf("failed to enqueue round winner: %w", err)
+	}
+
+	if err := s.redisClient.Del(ctx, votesKey(roundId)).Err(); err != nil {
+		return fmt.Errorf("failed to clear round votes: %w", err)
+	}
+
+	// Bir sonraki round'u açmak için OpenRound'u tekrar kullanıyoruz — bu
+	// round az önce closed yapıldığı için OpenRound'un "zaten açık round
+	// var mı" kontrolü buraya engel olmuyor, ve aday seçimi/insert/
+	// scheduleFinish mantığını tekrarlamamış oluyoruz.
+	if _, err := s.OpenRound(ctx, round.VenueID); err != nil {
+		if errors.Is(err, ErrNotEnoughTracks) {
+			// Playlist yeterli aday vermiyor (ör. tüm şarkılar cooldown'da)
+			// — round döngüsü burada duruyor; admin manuel olarak tekrar
+			// başlatana kadar yeni round açılmaz.
+			log.Printf("round %s: yeni round açılamadı, yeterli aday yok", round.VenueID.Hex())
+			return nil
+		}
+		return fmt.Errorf("failed to open next round: %w", err)
+	}
+
+	return nil
 }

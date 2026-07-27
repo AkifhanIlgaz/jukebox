@@ -25,6 +25,7 @@ func (h *RoundHandler) RegisterRoutes(app *fiber.App) {
 
 	round.Get("/", h.GetActiveRound)
 	round.Post("/start", h.StartRound)
+	round.Post("/close", h.CloseRound)
 }
 
 // GetActiveRound, venue'nin şu an açık olan oylama turunu döner. Açık tur
@@ -60,4 +61,23 @@ func (h *RoundHandler) StartRound(ctx fiber.Ctx) error {
 	}
 
 	return ctx.Status(201).JSON(r)
+}
+
+// CloseRound, admin panelden mevcut açık oylama turunu süresi dolmadan
+// manuel olarak kapatır. Kazanan seçilmez, kuyruğa ekleme yapılmaz; yeni
+// round admin tekrar "Oylama başlat" demeden açılmaz.
+//
+// TODO: RoundService.CloseRound implement edilecek (scaffold — bkz. CLAUDE.md).
+func (h *RoundHandler) CloseRound(ctx fiber.Ctx) error {
+	venueId := middleware.GetVenueID(ctx)
+
+	r, err := h.service.CloseRound(ctx.Context(), venueId)
+	if err != nil {
+		if errors.Is(err, ErrNoOpenRound) {
+			return fiber.NewError(fiber.StatusNotFound, err.Error())
+		}
+		return err
+	}
+
+	return ctx.Status(200).JSON(r)
 }

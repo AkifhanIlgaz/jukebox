@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
@@ -70,6 +71,33 @@ func (s *VenueService) GetByID(ctx context.Context, venueId bson.ObjectID) (*Ven
 		}
 
 		return nil, fmt.Errorf("failed to get venue: %w", err)
+	}
+
+	return &venue, nil
+}
+
+// UpdateVenue, admin panelden mekan adı/logosu ve tur ayarlarını günceller.
+// Slug değişmez.
+func (s *VenueService) UpdateVenue(ctx context.Context, venueId bson.ObjectID, req UpdateVenueRequest) (*Venue, error) {
+	filter := bson.M{"_id": venueId}
+	update := bson.M{
+		"$set": bson.M{
+			"name":       req.Name,
+			"logo_url":   req.LogoURL,
+			"settings":   req.Settings,
+			"updated_at": time.Now(),
+		},
+	}
+	opts := options.FindOneAndUpdate().SetReturnDocument(options.After)
+
+	var venue Venue
+	err := s.venuesCollection.FindOneAndUpdate(ctx, filter, update, opts).Decode(&venue)
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, ErrVenueNotFound
+		}
+
+		return nil, fmt.Errorf("failed to update venue: %w", err)
 	}
 
 	return &venue, nil

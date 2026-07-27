@@ -5,17 +5,39 @@ import { Sidebar } from "@/components/ui/app-layout/Sidebar";
 import { SidebarCollapseTrigger } from "@/components/ui/app-layout/SidebarCollapseTrigger";
 import { SidebarNavItem } from "@/components/ui/app-layout/SidebarNavItem";
 import { SidebarTrigger } from "@/components/ui/app-layout/SidebarTrigger";
-import { SidebarUserMenu } from "@/components/ui/app-layout/SidebarUserMenu";
-import { SidebarThemeToggle } from "@/components/ui/app-layout/SidebarThemeToggle";
+import { SidebarUserFooter } from "@/components/ui/app-layout/SidebarUserFooter";
 import { QueueProvider } from "@/features/admin/context/QueueContext";
 import { NowPlayingIndicator } from "@/features/admin/components/NowPlayingIndicator";
+import { useCurrentUser } from "@/features/auth/hooks/useCurrentUser";
+import { useLogout } from "@/features/auth/hooks/useLogout";
 import { LayoutDashboard, ListMusic, QrCode, Settings } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
+
+const ROLE_LABELS = {
+  boss: "Big Boss",
+  admin: "Admin",
+} as const;
 
 export default function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const router = useRouter();
+  const { data: currentUser, isLoading } = useCurrentUser();
+  const { logout } = useLogout();
+
+  useEffect(() => {
+    if (!isLoading && !currentUser) {
+      router.replace("/login");
+    }
+  }, [isLoading, currentUser, router]);
+
+  if (isLoading || !currentUser) {
+    return null;
+  }
+
   return (
     <QueueProvider>
       <AppLayout
@@ -25,26 +47,33 @@ export default function AdminLayout({
               <div className="flex min-w-0 items-center gap-2.5 px-1">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="/logo.svg" alt="" className="h-6 w-auto shrink-0" />
-                <span className="truncate text-sm font-semibold">TINI</span>
+                <span className="truncate text-sm font-semibold">tını</span>
               </div>
             }
             collapsedHeader={
-              <div className="flex w-full items-center justify-center overflow-hidden">
-                <div className="size-8 shrink-0 overflow-hidden rounded-lg">
+              <div className="flex flex-col w-full items-center justify-center">
+                <div className="size-8 shrink-0">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src="/logo.svg" alt="TINI" className="h-full w-full scale-150 object-cover" />
+                  <img src="/logo.svg" alt="TINI" className="h-full w-full object-contain" />
                 </div>
+                <span className="truncate text-xs font-semibold">tını</span>
               </div>
             }
             footer={
-              <SidebarUserMenu name="Akifhan Ilgaz" email="akifhanilgazz@gmail.com" initials="AH" />
+              <SidebarUserFooter
+                name={currentUser?.username ?? ""}
+                email={currentUser ? ROLE_LABELS[currentUser.role] : ""}
+                initials={currentUser?.username.slice(0, 2).toUpperCase() ?? ""}
+                onLogout={logout}
+              />
             }
           >
             <SidebarNavItem href="/admin" label="Genel Bakış" icon={LayoutDashboard} />
             <SidebarNavItem href="/admin/playlist" label="Playlist" icon={ListMusic} />
             <SidebarNavItem href="/admin/qr" label="QR Kod" icon={QrCode} />
-            <SidebarNavItem href="/admin/settings" label="Ayarlar" icon={Settings} />
-            <SidebarThemeToggle />
+            {currentUser?.role === "boss" ? (
+              <SidebarNavItem href="/admin/settings" label="Ayarlar" icon={Settings} />
+            ) : null}
           </Sidebar>
         }
         navbar={

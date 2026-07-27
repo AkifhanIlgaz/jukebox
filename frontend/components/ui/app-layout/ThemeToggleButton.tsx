@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 
 import { useSidebar } from "./context";
 
-export function SidebarThemeToggle() {
+export function ThemeToggleButton() {
   const [mounted, setMounted] = useState(false);
   const { resolvedTheme, setTheme } = useTheme();
   const { isCollapsed } = useSidebar();
@@ -29,10 +29,23 @@ export function SidebarThemeToggle() {
         isCollapsed ? "justify-center px-1.5" : "pr-2.5 pl-1.5"
       }`}
     >
-      <span className="flex size-7 shrink-0 items-center justify-center text-muted transition-colors group-hover:text-foreground">
-        {isDark ? <Sun className="size-4" /> : <Moon className="size-4" />}
+      <span className="relative flex size-7 shrink-0 items-center justify-center overflow-hidden text-muted transition-colors group-hover:text-accent">
+        <Sun
+          className={`absolute size-4 transition-all duration-300 ease-out ${
+            isDark
+              ? "-rotate-90 scale-0 opacity-0"
+              : "rotate-0 scale-100 opacity-100 group-hover:rotate-45"
+          }`}
+        />
+        <Moon
+          className={`absolute size-4 transition-all duration-300 ease-out ${
+            isDark
+              ? "rotate-0 scale-100 opacity-100 group-hover:-rotate-12"
+              : "rotate-90 scale-0 opacity-0"
+          }`}
+        />
       </span>
-      {!isCollapsed && (isDark ? "Açık Tema" : "Koyu Tema")}
+      {!isCollapsed && "Temayı değiştir"}
     </button>
   );
 

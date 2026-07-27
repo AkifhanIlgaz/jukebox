@@ -17,6 +17,7 @@ import (
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/cors"
 	"github.com/gofiber/fiber/v3/middleware/logger"
+	"github.com/gofiber/fiber/v3/middleware/recover"
 )
 
 const genericErrorMessage = "Beklenmeyen bir hata oluştu. Lütfen tekrar deneyin."
@@ -42,17 +43,18 @@ func main() {
 
 	authMiddleware := middleware.NewAuthMiddleware(cfg.JWTSecret)
 	authService := auth.NewAuthService(database, cfg.JWTSecret)
-	authHandler := auth.NewAuthHandler(authService, cfg.CookieDomain)
+	authHandler := auth.NewAuthHandler(authService, authMiddleware, cfg.CookieDomain)
 
 	trackService := track.NewTrackService(database, ytClient)
 	trackHandler := track.NewTrackHandler(trackService, authMiddleware)
 
 	venueService := venue.NewVenueService(database)
+	venueHandler := venue.NewVenueHandler(venueService, authMiddleware)
 
 	queueService := queue.NewQueueService(redisClient, trackService, venueService)
 	queueHandler := queue.NewQueueHandler(queueService, authMiddleware)
 
-	roundService := round.NewRoundService(database, redisClient, trackService, venueService)
+	roundService := round.NewRoundService(database, redisClient, trackService, venueService, queueService)
 	roundHandler := round.NewRoundHandler(roundService, authMiddleware)
 
 	app := fiber.New(fiber.Config{
@@ -81,6 +83,7 @@ func main() {
 	}))
 	app.Use(middleware.Device(cfg.CookieDomain))
 	app.Use(logger.New())
+	app.Use(recover.New())
 
 	app.Get("/health", func(c fiber.Ctx) error {
 		return c.JSON(fiber.Map{"status": "ok"})
@@ -90,6 +93,7 @@ func main() {
 	trackHandler.RegisterRoutes(app)
 	queueHandler.RegisterRoutes(app)
 	roundHandler.RegisterRoutes(app)
+	venueHandler.RegisterRoutes(app)
 
 	log.Fatal(app.Listen(":" + cfg.Port))
 }

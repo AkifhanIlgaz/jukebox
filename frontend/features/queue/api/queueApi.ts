@@ -39,6 +39,10 @@ class QueueApi extends BaseApi {
   async removeFromQueue(youtubeId: string) {
     return this.delete(`/queue/${youtubeId}`, z.unknown());
   }
+
+  async clearQueue() {
+    return this.delete("/queue", z.unknown());
+  }
 }
 
 export const queueApi = new QueueApi();

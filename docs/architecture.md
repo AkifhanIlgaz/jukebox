@@ -84,8 +84,16 @@ IFrame'li sayfamız; v2'de Chrome extension aynı protokolle ikinci istemci olab
 - **Mekan sahibi:** username + şifre (kendi implementasyonumuz; bcrypt hash, JWT
   süresiz token, httpOnly `auth_token` çerezi — karar 2026-07-24). Google OAuth v2
   adayı. Slug mekan adından otomatik türetilir. Register bu iterasyonda yok (hesaplar
-  elle açılır); bir mekanın birden fazla admin'i olabilir. Şifre sıfırlama MVP'de yok
-  (mail altyapısı yok).
+  elle açılır). Şifre sıfırlama MVP'de yok (mail altyapısı yok).
+- **Roller — Big Boss / Admin (karar 2026-07-27):** her mekanın tam bir **Big
+  Boss**'u (elle DB'ye açılır) ve istediği kadar **Admin**'i olabilir. Boss mekan
+  ayarlarını değiştirebilir ve admin oluşturup silebilir (panelde Ayarlar sayfası
+  → kullanıcı tablosu); admin bunların dışındaki her şeyi (playlist, kuyruk, round)
+  kullanabilir — bu kısım rol farkı olmadan paylaşımlı. Rol JWT claim'inde taşınır
+  (backend `middleware.RequireRole` ile korunur) ve login'de ayrıca httpOnly
+  OLMAYAN `role`/`username` cookie'leriyle client'a da yansıtılır — bu ikinci
+  cookie çifti bir yetki sınırı değil, sadece frontend'in Ayarlar'ı gösterip
+  gizlemesi için (asıl yetki backend'de).
 - **QR:** statik, `tini.app/v/{slug}` URL'ini taşır. Dönen QR altyapısı v2.
 
 ## Deploy

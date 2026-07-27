@@ -5,6 +5,83 @@ Bir karar değişirse silinmez; üstüne "İPTAL/REVİZE (tarih)" notu düşül�
 
 ---
 
+## 2026-07-27 — Rol sistemi: Big Boss / Admin
+
+**Karar:** `users` dokümanına `role: "boss" | "admin"` alanı eklendi. Mekan başına
+**tam bir** Big Boss olacak — elle DB'ye açılır (register akışı yok, mevcut manuel
+hesap açma modeliyle aynı), `{venueId, role}` üzerinde partial unique index
+(`role: "boss"` filtresiyle) bunu DB seviyesinde garanti eder. Admin hesapları
+Big Boss tarafından panelden açılır/silinir (`POST /users`, `DELETE /users/:id`,
+username+şifre — mevcut login modeliyle aynı, register akışı yine yok). Sadece
+Big Boss mekan ayarlarını değiştirebilir (`PUT /venue`, ayrıca `GET /venue` de
+boss-only — sadece Ayarlar sayfasında kullanılıyor) ve admin oluşturup silebilir;
+geri kalan her şey (playlist, kuyruk, round) rol farkı olmadan paylaşımlı.
+
+Rol JWT claim'ine eklendi (`middleware.RequireRole(role)` ile route bazlı
+korunuyor). Frontend'in Ayarlar sayfasını/sidebar'ı role göre gösterip
+gizleyebilmesi için ayrı bir `/me` endpoint'i **yazılmadı** — bunun yerine
+login/logout'ta `auth_token` (httpOnly) ile birlikte httpOnly OLMAYAN `role` ve
+`username` cookie'leri de set/temizleniyor; frontend bunları ağ isteği atmadan
+okuyor. Bu ikinci cookie çifti bir yetki sınırı değil (client tarafından
+değiştirilebilir), sadece UI kararı — asıl yetki her zaman backend'de
+`RequireRole` ile korunuyor.
+
+**Neden:** Kullanıcı kararı. `/me` + react-query yerine cookie okuma tercih
+edildi çünkü rol zaten güvenlik sınırı taşımıyor; ekstra bir istek/hook
+karmaşıklığına gerek yok.
+
+**Sonuç:**
+- `backend/internal/auth`: `User.Role`, `RoleAdmin`/`RoleBoss` sabitleri,
+  `AuthService.CreateAdmin`/`DeleteAdmin`/`ListByVenue`, `AuthHandler`'da
+  `/users` grubu (boss-only).
+- JWT/cookie mekaniği (`Claims`, `GenerateToken`, `ParseToken`, `CookieName`)
+  `auth` paketinden yeni bir `backend/internal/token` paketine taşındı — `auth`
+  paketi artık `middleware.AuthMiddleware`'i (route koruması için) kullanabiliyor
+  olsa da, `middleware` paketinin `auth`'a bağımlı kalması import cycle'a yol
+  açıyordu. `token` bağımsız bir temel paket; `middleware` ve `auth` ona
+  bağımlı, birbirlerine değil. `middleware.RequireBoss()` da bu yüzden generic
+  `RequireRole(role string)` oldu — rol sabitleri `middleware`'e değil `auth`
+  paketinde kalmaya devam ediyor (kullanıcı tercihi).
+- `docs/database.md`: `users.role` alanı ve partial unique index eklendi.
+
+## 2026-07-27 — Round döngüsü otomatikleşti: time.AfterFunc ile FinishRound
+
+**Karar:** Round artık sadece manuel açılıp kapanmıyor — `OpenRound` bir round
+oluşturunca `time.AfterFunc(EndsAt, FinishRound)` ile kendi bitişini
+zamanlıyor. `FinishRound` süresi dolan round'u kapatır (Redis'teki oy
+sayaçlarını final `candidates[].votes`'a yazar, kazananı belirler —
+berabere olursa rastgele — ve hemen `queue`'ya ekler, yani kazanan şarkı
+gecikmeden çalmaya başlar), ardından **arada boşluk bırakmadan** bir sonraki
+round'u hemen `open` durumunda açıp kendi `FinishRound`'unu zamanlar — döngü
+böyle sürekli kendi kendini besliyor, dıştan (cron/scheduler) tetiklemeye
+gerek kalmıyor.
+
+**REVİZE (2026-07-27):** İlk tasarımda round kapanışı ile bir sonrakinin
+açılışı arasında `scheduled` ara durumlu ~1 dakikalık bir boşluk vardı
+(`StartRound` diye ayrı bir adım, `time.AfterFunc(StartedAt, StartRound)`).
+Kullanıcı bundan vazgeçti: sonuç gösterme/bekleme yerine round bitince
+hemen yeni round açılıp kazanan direkt çalmaya başlasın istendi. `scheduled`
+status'ü ve `StartRound` kaldırıldı — artık sadece `open`/`closed` var.
+
+**Neden:** Kullanıcı tercihi — basitlik ve gecikmesiz geçiş (kazanan hemen
+çalsın) tercih edildi.
+
+**Sonuç:**
+- `RoundService` artık `queue.QueueService`'e bağımlı (kazananı kuyruğa
+  eklemek için); `round` paketi `queue`'yu import ediyor (tersi yok,
+  cycle oluşmuyor).
+- `OpenRound` ve `FinishRound`'un aday seçme adımları `selectCandidates`
+  private helper'ında birleştirildi (tekrarı önlemek için).
+- **Bilinen kısıt:** zamanlayıcılar yalnızca process belleğinde —
+  sunucu yeniden başlarsa bekleyen `FinishRound` tetiklemesi kaybolur (o
+  round askıda kalır, admin manuel yeni round başlatana kadar). Kalıcı bir
+  job scheduler'a geçiş şimdilik kapsam dışı, ileride değerlendirilebilir.
+- WebSocket ile sonuç/round bilgisini client'lara anlık gönderme kısmı BU
+  karara dahil değil — WS zaten ayrı olarak ertelenmiş durumda (bkz.
+  aşağıdaki "WebSocket ertelendi" kararı); `FinishRound`/`StartRound`
+  implementasyonunda ilgili adımlar "WS eklenince buraya" notuyla
+  işaretlendi.
+
 ## 2026-07-27 — Round aday cooldown'u, queue fallback cooldown'undan ayrı
 
 **Karar:** Round'un aday seçiminde kullanılan cooldown, queue fallback'in

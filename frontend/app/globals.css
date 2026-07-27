@@ -13,6 +13,8 @@
   --border: oklch(90.00% 0.0100 79.00);
   --danger: oklch(65.32% 0.2335 25.74);
   --danger-foreground: oklch(99.11% 0 0);
+  --danger-soft: color-mix(in oklab, var(--danger) 26%, transparent);
+  --danger-soft-hover: color-mix(in oklab, var(--danger) 34%, transparent);
   --default: oklch(94.00% 0.0080 79.00);
   --default-foreground: oklch(21.03% 0.0100 79.00);
   --field-background: oklch(100.00% 0.0040 79.00);
@@ -58,10 +60,12 @@
   --border: oklch(28.00% 0.0100 79.00);
   --danger: oklch(59.40% 0.1973 24.63);
   --danger-foreground: oklch(99.11% 0 0);
+  --danger-soft: color-mix(in oklab, var(--danger) 30%, transparent);
+  --danger-soft-hover: color-mix(in oklab, var(--danger) 38%, transparent);
   --default: oklch(27.40% 0.0100 79.00);
   --default-foreground: oklch(99.11% 0.0080 79.00);
-  --field-background: oklch(21.03% 0.0100 79.00);
-  --field-border: transparent;
+  --field-background: oklch(25.70% 0.0100 79.00);
+  --field-border: oklch(34.00% 0.0100 79.00);
   --field-foreground: oklch(99.11% 0.0080 79.00);
   --field-placeholder: oklch(70.50% 0.0150 79.00);
   --focus: oklch(68.00% 0.1250 79.00);

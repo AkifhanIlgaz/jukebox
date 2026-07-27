@@ -27,6 +27,7 @@ func (h *QueueHandler) RegisterRoutes(app *fiber.App) {
 	queue.Get("/", h.GetQueue)
 	queue.Post("/", h.AddToQueue)
 	queue.Post("/next", h.Next)
+	queue.Delete("/", h.ClearQueue)
 	queue.Delete("/:youtubeId", h.RemoveFromQueue)
 }
 
@@ -79,6 +80,19 @@ func (h *QueueHandler) Next(ctx fiber.Ctx) error {
 	}
 
 	return ctx.Status(200).JSON(playlistTrack)
+}
+
+// ClearQueue, admin panelden venue'nin tüm çalma sırasını sıfırlar.
+//
+// TODO: QueueService.ClearQueue implement edilecek (scaffold — bkz. CLAUDE.md).
+func (h *QueueHandler) ClearQueue(ctx fiber.Ctx) error {
+	venueId := middleware.GetVenueID(ctx)
+
+	if err := h.service.ClearQueue(ctx.Context(), venueId); err != nil {
+		return err
+	}
+
+	return ctx.SendStatus(200)
 }
 
 func (h *QueueHandler) RemoveFromQueue(ctx fiber.Ctx) error {

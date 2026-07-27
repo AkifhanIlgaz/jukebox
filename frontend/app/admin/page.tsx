@@ -1,5 +1,6 @@
 import { Card } from "@heroui/react";
 
+import { PageHeader } from "@/components/ui/PageHeader";
 import { NowPlayingCard } from "@/features/admin/components/NowPlayingCard";
 
 function cover(hue: number) {
@@ -32,17 +33,21 @@ const maxVotes = Math.max(...candidates.map((c) => c.votes), 1);
 export default function AdminOverviewPage() {
   return (
     <div className="flex w-full flex-col gap-4 p-8">
-      <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight">Genel Bakış</h1>
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-accent/10 px-2.5 py-1 text-xs font-semibold text-accent">
-          <span className="size-1.5 animate-pulse rounded-full bg-accent" />
-          Yayında
-        </span>
-        <div className="flex-1" />
-        <span className="text-sm text-muted">
-          Yeni tur: <b className="font-semibold tabular-nums text-foreground">4:14</b>
-        </span>
-      </div>
+      <PageHeader
+        title="Genel Bakış"
+        description="Mekanının canlı oylamasına, çalma kuyruğuna ve günlük istatistiklerine tek bakışta göz at."
+        actions={
+          <>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-accent/10 px-2.5 py-1 text-xs font-semibold text-accent">
+              <span className="size-1.5 animate-pulse rounded-full bg-accent" />
+              Yayında
+            </span>
+            <span className="text-sm text-muted">
+              Yeni tur: <b className="font-semibold tabular-nums text-foreground">4:14</b>
+            </span>
+          </>
+        }
+      />
 
       <NowPlayingCard />
 

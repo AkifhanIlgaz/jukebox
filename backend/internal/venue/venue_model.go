@@ -24,11 +24,12 @@ type VenueSettings struct {
 }
 
 type Venue struct {
-	ID        bson.ObjectID `bson:"_id,omitempty" json:"id"`
-	Slug      string        `bson:"slug" json:"slug"`
-	Name      string        `bson:"name" json:"name"`
-	LogoURL   string        `bson:"logo_url" json:"logoUrl"`
-	Settings  VenueSettings `bson:"settings" json:"settings"`
-	CreatedAt time.Time     `bson:"created_at" json:"createdAt"`
-	UpdatedAt time.Time     `bson:"updated_at" json:"updatedAt"`
+	ID         bson.ObjectID `bson:"_id,omitempty" json:"id"`
+	Slug       string        `bson:"slug" json:"slug"`
+	Name       string        `bson:"name" json:"name"`
+	LogoURL    string        `bson:"logo_url" json:"logoUrl"`
+	Settings   VenueSettings `bson:"settings" json:"settings"`
+	NowPlaying string        `bson:"now_playing" json:"nowPlaying"` // Youtube video ID of the currently playing track
+	CreatedAt  time.Time     `bson:"created_at" json:"createdAt"`
+	UpdatedAt  time.Time     `bson:"updated_at" json:"updatedAt"`
 }

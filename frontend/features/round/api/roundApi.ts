@@ -40,6 +40,10 @@ class RoundApi extends BaseApi {
   async startRound() {
     return this.post("/round/start", roundSchema);
   }
+
+  async closeRound() {
+    return this.post("/round/close", roundSchema);
+  }
 }
 
 export const roundApi = new RoundApi();

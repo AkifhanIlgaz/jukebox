@@ -1,13 +1,60 @@
 "use client";
 
-import { Button, Card, Spinner } from "@heroui/react";
-import { Crown, Vote } from "lucide-react";
+import { AlertDialog, Button, Card, Spinner } from "@heroui/react";
+import NumberFlow from "@number-flow/react";
+import { ArrowDown, ArrowUp, Crown, SquareX, Vote } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useActiveRound } from "@/features/round/hooks/useActiveRound";
+import { useCloseRound } from "@/features/round/hooks/useCloseRound";
 import { useStartRound } from "@/features/round/hooks/useStartRound";
+
+type RankDirection = "up" | "down";
+
+// useRankChanges, orderedCandidates'ın sırası değiştiğinde hangi adayın
+// yukarı/aşağı hareket ettiğini bir süreliğine işaretler — kart yanındaki
+// yeşil/kırmızı ok göstergesi için kullanılıyor.
+function useRankChanges(orderedYoutubeIds: string[]) {
+  const previousRanksRef = useRef<Record<string, number> | null>(null);
+  const [directions, setDirections] = useState<Record<string, RankDirection>>({});
+
+  useEffect(() => {
+    const previousRanks = previousRanksRef.current;
+    const nextRanks: Record<string, number> = {};
+    orderedYoutubeIds.forEach((youtubeId, position) => {
+      nextRanks[youtubeId] = position;
+    });
+
+    const applyDiff = () => {
+      if (!previousRanks) return;
+
+      const nextDirections: Record<string, RankDirection> = {};
+      for (const youtubeId of orderedYoutubeIds) {
+        const previousPosition = previousRanks[youtubeId];
+        const nextPosition = nextRanks[youtubeId];
+        if (previousPosition !== undefined && previousPosition !== nextPosition) {
+          nextDirections[youtubeId] = nextPosition < previousPosition ? "up" : "down";
+        }
+      }
+
+      if (Object.keys(nextDirections).length > 0) {
+        setDirections(nextDirections);
+      }
+    };
+    applyDiff();
+
+    previousRanksRef.current = nextRanks;
+
+    const clear = () => setDirections({});
+    const timeout = setTimeout(clear, 700);
+    return () => clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderedYoutubeIds.join("|")]);
+
+  return directions;
+}
 
 function useCountdown(endsAt: Date | undefined) {
   const [now, setNow] = useState(() => Date.now());
@@ -25,16 +72,24 @@ function useCountdown(endsAt: Date | undefined) {
   return endsAt ? Math.max(0, endsAt.getTime() - now) : 0;
 }
 
-function formatCountdown(ms: number) {
-  const totalSeconds = Math.floor(ms / 1000);
+function Countdown({ remainingMs }: { remainingMs: number }) {
+  const totalSeconds = Math.floor(remainingMs / 1000);
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
-  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+
+  return (
+    <span className="flex items-center tabular-nums">
+      <NumberFlow value={minutes} />
+      <span>:</span>
+      <NumberFlow value={seconds} format={{ minimumIntegerDigits: 2 }} />
+    </span>
+  );
 }
 
 export function ActiveRoundCard() {
   const { data: round, isLoading } = useActiveRound();
   const startRoundMutation = useStartRound();
+  const closeRoundMutation = useCloseRound();
   const remainingMs = useCountdown(round?.endsAt);
 
   // Test amaçlı, sadece frontend'de yaşayan oy sayacı — backend'e hiçbir
@@ -58,6 +113,8 @@ export function ActiveRoundCard() {
         }))
         .sort((a, b) => b.votes - a.votes || a.index - b.index)
     : [];
+
+  const rankDirections = useRankChanges(orderedCandidates.map((candidate) => candidate.youtubeId));
 
   function handleVote(youtubeId: string) {
     setLocalVotes((prev) => ({ ...prev, [youtubeId]: (prev[youtubeId] ?? 0) + 1 }));
@@ -97,14 +154,53 @@ export function ActiveRoundCard() {
           <div className="text-lg font-semibold tracking-tight">Aktif Oylama</div>
           <div className="text-xs text-muted">{round.candidates.length} aday şarkı</div>
         </div>
-        <div className="shrink-0 rounded-full bg-surface-tertiary px-3 py-1 text-sm font-bold tabular-nums">
-          {remainingMs <= 0 ? "Bitiyor..." : formatCountdown(remainingMs)}
+        <div className="flex shrink-0 items-center gap-2">
+          <div className="rounded-full bg-surface-tertiary px-3 py-1 text-sm font-bold tabular-nums">
+            {remainingMs <= 0 ? "Bitiyor..." : <Countdown remainingMs={remainingMs} />}
+          </div>
+          <AlertDialog>
+            <Button
+              variant="danger-soft"
+              size="sm"
+              isIconOnly
+              aria-label="Oylamayı kapat"
+              isDisabled={closeRoundMutation.isPending}
+            >
+              <SquareX className="size-4" />
+            </Button>
+            <AlertDialog.Backdrop>
+              <AlertDialog.Container>
+                <AlertDialog.Dialog className="sm:max-w-[400px]">
+                  <AlertDialog.CloseTrigger />
+                  <AlertDialog.Header>
+                    <AlertDialog.Icon status="danger" />
+                    <AlertDialog.Heading>Oylamayı kapat?</AlertDialog.Heading>
+                  </AlertDialog.Header>
+                  <AlertDialog.Body>
+                    <p>
+                      Aktif oylama turu kazanan seçilmeden kapatılacak ve oylar silinecek. Yeni bir
+                      tur açmak için tekrar &quot;Oylama başlat&quot; demen gerekecek.
+                    </p>
+                  </AlertDialog.Body>
+                  <AlertDialog.Footer>
+                    <Button slot="close" variant="tertiary">
+                      Vazgeç
+                    </Button>
+                    <Button slot="close" variant="danger" onPress={() => closeRoundMutation.mutate()}>
+                      Kapat
+                    </Button>
+                  </AlertDialog.Footer>
+                </AlertDialog.Dialog>
+              </AlertDialog.Container>
+            </AlertDialog.Backdrop>
+          </AlertDialog>
         </div>
       </div>
       <Card.Content className="mt-3.5 flex flex-col gap-2">
         <AnimatePresence initial={false}>
           {orderedCandidates.map((candidate, position) => {
             const isFirst = position === 0;
+            const rankDirection = rankDirections[candidate.youtubeId];
 
             return (
               <motion.button
@@ -146,13 +242,36 @@ export function ActiveRoundCard() {
                   </div>
                   <div className="truncate text-xs text-muted">{candidate.channel}</div>
                 </div>
-                <div
+                <NumberFlow
+                  value={candidate.votes}
                   className={
-                    isFirst ? "shrink-0 text-xl font-bold tabular-nums text-accent" : "shrink-0 text-base font-bold tabular-nums"
+                    isFirst
+                      ? "shrink-0 text-xl font-bold tabular-nums text-accent"
+                      : "shrink-0 text-base font-bold tabular-nums"
                   }
-                >
-                  {candidate.votes}
-                </div>
+                />
+                <AnimatePresence>
+                  {rankDirection ? (
+                    <motion.span
+                      key="rank-indicator"
+                      initial={{ opacity: 0, x: -4 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className={
+                        rankDirection === "up"
+                          ? "absolute -right-5 top-1/2 -translate-y-1/2 text-green-500"
+                          : "absolute -right-5 top-1/2 -translate-y-1/2 text-red-500"
+                      }
+                    >
+                      {rankDirection === "up" ? (
+                        <ArrowUp className="size-4" />
+                      ) : (
+                        <ArrowDown className="size-4" />
+                      )}
+                    </motion.span>
+                  ) : null}
+                </AnimatePresence>
               </motion.button>
             );
           })}
