@@ -25,4 +25,8 @@ type PlaylistTrack struct {
 	// LastPlayedAt, "son çalınanlar" cooldown filtresi için (bkz.
 	// decisions.md 2026-07-26). Hiç çalınmadıysa nil.
 	LastPlayedAt *time.Time `bson:"last_played_at" json:"lastPlayedAt,omitempty"`
+	// LastCandidateAt, bir şarkının en son round adayı gösterildiği an
+	// (kazanıp çalınmasa bile) — CandidateCooldownMin filtresi buna bakar
+	// (bkz. decisions.md 2026-07-27). Hiç aday olmadıysa nil.
+	LastCandidateAt *time.Time `bson:"last_candidate_at" json:"lastCandidateAt,omitempty"`
 }

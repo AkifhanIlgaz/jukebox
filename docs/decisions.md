@@ -5,6 +5,27 @@ Bir karar değişirse silinmez; üstüne "İPTAL/REVİZE (tarih)" notu düşül�
 
 ---
 
+## 2026-07-27 — Round aday cooldown'u, queue fallback cooldown'undan ayrı
+
+**Karar:** Round'un aday seçiminde kullanılan cooldown, queue fallback'in
+`recentlyPlayedCooldownMin`'inden **ayrı** bir ayar: `venue.settings.
+candidateCooldownMin` (varsayılan 30 dk). `tracks` (playlist) dokümanına yeni
+`lastCandidateAt` alanı eklendi — bir şarkı round'da aday gösterildiğinde
+(kazanıp çalınmasa bile) güncellenir. `TrackService.RandomCandidates` artık
+`lastPlayedAt` değil `lastCandidateAt`'a bakan bir cooldown filtresiyle çalışır
+(`TrackService.MarkCandidates` ile güncellenir).
+
+**Neden:** Bir şarkı round'da aday olup kaybedebilir — hiç çalınmaz,
+`lastPlayedAt` değişmez. `recentlyPlayedCooldownMin` filtresini kullansaydık bu
+şarkı bir sonraki turda hemen tekrar aday olabilirdi (müşteri "yine bu şarkı mı"
+hissi). Ayrı bir cooldown, "adaylık" ile "çalınma"yı birbirinden bağımsız
+sınırlıyor.
+
+**Sonuç:** 2026-07-26 kararındaki "(ve round'un aday seçimindeki)" ifadesi bu
+kararla REVİZE edildi — round artık kendi cooldown'unu kullanıyor, queue
+fallback'inkini paylaşmıyor. `venue.settings.candidateCooldownMin` ve
+`tracks.lastCandidateAt` eklendi (bkz. database.md).
+
 ## 2026-07-26 — Uygulama adı: TINI, logo: audiowave
 
 **Karar:** Uygulamanın adı **TINI** olarak belirlendi. Logo audiowave (ses dalgası)

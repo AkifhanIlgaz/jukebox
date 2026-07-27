@@ -10,6 +10,7 @@ import (
 	"github.com/AkifhanIlgaz/jukebox/internal/db"
 	"github.com/AkifhanIlgaz/jukebox/internal/middleware"
 	"github.com/AkifhanIlgaz/jukebox/internal/queue"
+	"github.com/AkifhanIlgaz/jukebox/internal/round"
 	"github.com/AkifhanIlgaz/jukebox/internal/track"
 	"github.com/AkifhanIlgaz/jukebox/internal/venue"
 	"github.com/AkifhanIlgaz/jukebox/internal/youtube"
@@ -51,6 +52,9 @@ func main() {
 	queueService := queue.NewQueueService(redisClient, trackService, venueService)
 	queueHandler := queue.NewQueueHandler(queueService, authMiddleware)
 
+	roundService := round.NewRoundService(database, redisClient, trackService, venueService)
+	roundHandler := round.NewRoundHandler(roundService, authMiddleware)
+
 	app := fiber.New(fiber.Config{
 		ErrorHandler: func(c fiber.Ctx, err error) error {
 			code := fiber.StatusInternalServerError
@@ -85,6 +89,7 @@ func main() {
 	authHandler.RegisterRoutes(app)
 	trackHandler.RegisterRoutes(app)
 	queueHandler.RegisterRoutes(app)
+	roundHandler.RegisterRoutes(app)
 
 	log.Fatal(app.Listen(":" + cfg.Port))
 }

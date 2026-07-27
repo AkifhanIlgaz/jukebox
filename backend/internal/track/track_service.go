@@ -281,6 +281,99 @@ func (s *TrackService) oldestPlayedTrack(ctx context.Context, venueId bson.Objec
 	return &track, nil
 }
 
+// RandomCandidates, round'un aday listesi için venue playlist'inden en fazla
+// n farklı şarkı döner. Filtre last_played_at DEĞİL last_candidate_at
+// üzerinden çalışır — bir şarkı çalmadan (kaybederek) de aday olmuş
+// sayılır, art arda turlarda sürekli aday çıkmasın isteriz (bkz.
+// decisions.md 2026-07-27, CandidateCooldownMin).
+//
+// RandomTrack'teki gevşetme mantığının çoklu-aday hali: candidateCooldownCutoff
+// filtresiyle bulunan aday sayısı n'den azsa (ör. playlist küçük, çoğu şarkı
+// cooldown'da), eksik kalan miktar cooldown yok sayılarak last_candidate_at
+// ascending (en eski aday olan/hiç aday olmamış önce) sıralı şarkılarla
+// tamamlanır — zaten seçilmiş youtube_id'ler tekrar eklenmez. Playlist'te
+// n'den az şarkı varsa dönen slice n'den kısa olabilir (ErrNotEnoughTracks
+// gibi bir kontrol round tarafında yapılmalı).
+//
+func (s *TrackService) RandomCandidates(ctx context.Context, venueId bson.ObjectID, candidateCooldownCutoff time.Time, n int) ([]PlaylistTrack, error) {
+	filter := bson.M{"venue_id": venueId}
+	if !candidateCooldownCutoff.IsZero() {
+		filter["$or"] = bson.A{
+			bson.M{"last_candidate_at": nil},
+			bson.M{"last_candidate_at": bson.M{"$lt": candidateCooldownCutoff}},
+		}
+	}
+
+	pipeline := bson.A{
+		bson.M{"$match": filter},
+		bson.M{"$sample": bson.M{"size": n}},
+	}
+
+	cursor, err := s.playlistsCollection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find candidates: %w", err)
+	}
+	defer cursor.Close(ctx)
+
+	candidates := []PlaylistTrack{}
+	if err := cursor.All(ctx, &candidates); err != nil {
+		return nil, fmt.Errorf("failed to decode candidates: %w", err)
+	}
+
+	if len(candidates) >= n || candidateCooldownCutoff.IsZero() {
+		return candidates, nil
+	}
+
+	excludedYoutubeIds := make([]string, 0, len(candidates))
+	for _, candidate := range candidates {
+		excludedYoutubeIds = append(excludedYoutubeIds, candidate.YoutubeID)
+	}
+
+	fallbackFilter := bson.M{
+		"venue_id":   venueId,
+		"youtube_id": bson.M{"$nin": excludedYoutubeIds},
+	}
+
+	opts := options.Find().
+		SetSort(bson.D{{Key: "last_candidate_at", Value: 1}}).
+		SetLimit(int64(n - len(candidates)))
+
+	fallbackCursor, err := s.playlistsCollection.Find(ctx, fallbackFilter, opts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find fallback candidates: %w", err)
+	}
+	defer fallbackCursor.Close(ctx)
+
+	fallbackCandidates := []PlaylistTrack{}
+	if err := fallbackCursor.All(ctx, &fallbackCandidates); err != nil {
+		return nil, fmt.Errorf("failed to decode fallback candidates: %w", err)
+	}
+
+	return append(candidates, fallbackCandidates...), nil
+}
+
+// MarkCandidates, round açılırken seçilen adayların last_candidate_at'ını
+// günceller (CandidateCooldownMin filtresi bu alana bakıyor — bkz.
+// RandomCandidates).
+func (s *TrackService) MarkCandidates(ctx context.Context, venueId bson.ObjectID, youtubeIds []string) error {
+	filter := bson.M{
+		"venue_id":   venueId,
+		"youtube_id": bson.M{"$in": youtubeIds},
+	}
+
+	update := bson.M{
+		"$set": bson.M{
+			"last_candidate_at": time.Now(),
+		},
+	}
+
+	if _, err := s.playlistsCollection.UpdateMany(ctx, filter, update); err != nil {
+		return fmt.Errorf("failed to mark candidates: %w", err)
+	}
+
+	return nil
+}
+
 // MarkPlayed, bir şarkı çalmaya başladığında last_played_at'ı günceller
 // (cooldown filtresi bu alana bakıyor — bkz. RandomTrack). Önceden Redis
 // recent-list'e LPUSH olarak yapılıyordu (bkz. decisions.md 2026-07-26).

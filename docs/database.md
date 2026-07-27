@@ -17,9 +17,13 @@
   settings: {
     roundIntervalMin: 10,             // tur aralığı (dk)
     candidateCount: 5,                // tur başına rastgele aday şarkı sayısı
-    recentlyPlayedCooldownMin: 20     // şarkı son çalınışından bu kadar dk geçmeden
-                                       // tekrar aday/fallback olamaz (karar 2026-07-26,
+    recentlyPlayedCooldownMin: 20,    // şarkı son çalınışından bu kadar dk geçmeden
+                                       // queue fallback'te seçilemez (karar 2026-07-26,
                                        // eski recentlyPlayedWindow sayısının yerine)
+    candidateCooldownMin: 30          // şarkı son ADAY olduğu andan bu kadar dk
+                                       // geçmeden round'da tekrar aday olamaz —
+                                       // recentlyPlayedCooldownMin'den ayrı (karar
+                                       // 2026-07-27, bkz. tracks.lastCandidateAt)
   },
   createdAt, updatedAt
 }
@@ -54,8 +58,13 @@
   channelName: "...",            // oEmbed'den (author_name)
   thumbnailUrl: "...",           // oEmbed'den (thumbnail_url)
   addedAt,
-  lastPlayedAt: ISODate | null   // cooldown filtresi için (karar 2026-07-26,
-                                 // Redis'teki sayı bazlı "recent" listenin yerine)
+  lastPlayedAt: ISODate | null,     // queue fallback cooldown filtresi için (karar
+                                     // 2026-07-26, Redis'teki sayı bazlı "recent"
+                                     // listenin yerine)
+  lastCandidateAt: ISODate | null   // round aday-seçimi cooldown filtresi için
+                                     // (karar 2026-07-27) — lastPlayedAt'tan ayrı:
+                                     // bir şarkı çalmadan (kaybederek) de aday
+                                     // olabilir
 }
 // NOT: durationSec YOK — oEmbed süre vermez, akış IFrame'in TRACK_ENDED
 // olayıyla yürüdüğü için gerekmez.
@@ -69,14 +78,14 @@
   _id: ObjectId,
   venueId: ObjectId,
   status: "open" | "closed",
-  startsAt, endsAt,
+  startedAt, endsAt,
   candidates: [                  // aday şarkılar + FİNAL oy sayaçları gömülü
     { trackId: ObjectId, youtubeVideoId: "...", title: "...", votes: 12 },
     { trackId: ObjectId, ..., votes: 7 }
   ],
-  winnerTrackId: ObjectId | null // tur kapanınca yazılır
+  winnerYoutubeVideoId: string | null // tur kapanınca yazılır
 }
-// index: { venueId: 1, status: 1 }, { venueId: 1, startsAt: -1 }
+// index: { venueId: 1, status: 1 }, { venueId: 1, startedAt: -1 }
 // KARAR (2026-07-25): tur AÇIKKEN canlı sayaç Redis sorted set'te tutulur
 // (round:{roundId}:votes, ZINCRBY). Tur kapanınca final skorlar buraya
 // (candidates[].votes) yazılır, sorted set silinir — bu alan sadece kalıcı

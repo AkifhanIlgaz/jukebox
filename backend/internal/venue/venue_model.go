@@ -14,6 +14,13 @@ type VenueSettings struct {
 	// belirtir (bkz. decisions.md 2026-07-26 — sayı bazlı pencereden süre
 	// bazlı cooldown'a geçiş).
 	RecentlyPlayedCooldownMin int `bson:"recently_played_cooldown_min" json:"recentlyPlayedCooldownMin"`
+	// CandidateCooldownMin, bir şarkının round'da tekrar ADAY olabilmesi
+	// için son aday olduğu andan bu kadar dakika geçmesi gerektiğini
+	// belirtir. RecentlyPlayedCooldownMin'den ayrı: bir şarkı aday
+	// gösterilip oy alamadan turu kaybedebilir (hiç çalınmamış olur) ama
+	// yine de art arda turlarda sürekli aday olarak karşımıza çıkmasın
+	// isteriz (bkz. decisions.md 2026-07-27).
+	CandidateCooldownMin int `bson:"candidate_cooldown_min" json:"candidateCooldownMin"`
 }
 
 type Venue struct {

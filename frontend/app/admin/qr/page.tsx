@@ -3,6 +3,7 @@
 import { NowPlayingCard } from "@/features/admin/components/NowPlayingCard";
 import { AddToQueueForm } from "@/features/queue/components/AddToQueueForm";
 import { QueueList } from "@/features/queue/components/QueueList";
+import { ActiveRoundCard } from "@/features/round/components/ActiveRoundCard";
 
 export default function AdminQrPage() {
   return (
@@ -12,8 +13,11 @@ export default function AdminQrPage() {
       <NowPlayingCard />
 
       <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[1fr_1.2fr]">
-        <AddToQueueForm />
-        <QueueList />
+        <ActiveRoundCard />
+        <div className="flex flex-col gap-4">
+          <AddToQueueForm />
+          <QueueList />
+        </div>
       </div>
     </div>
   );
