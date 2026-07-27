@@ -100,10 +100,12 @@ func (s *QueueService) Next(ctx context.Context, venueId bson.ObjectID) (*track.
 		return playlistTrack, nil
 	}
 
-	// TODO: venueService.GetByID ile venue'nin
-	// settings.recentlyPlayedCooldownMin'ini çek, cooldownCutoff'u
-	// (time.Now().Add(-cooldown)) hesapla ve aşağıya ver.
-	var cooldownCutoff time.Time
+	venue, err := s.venueService.GetByID(ctx, venueId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get venue: %w", err)
+	}
+
+	cooldownCutoff := time.Now().Add(-time.Duration(venue.Settings.RecentlyPlayedCooldownMin) * time.Minute)
 
 	playlistTrack, err := s.trackService.RandomTrack(ctx, venueId, cooldownCutoff)
 	if err != nil {

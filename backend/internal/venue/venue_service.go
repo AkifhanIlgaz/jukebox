@@ -2,6 +2,7 @@ package venue
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -58,10 +59,18 @@ func (s *VenueService) CreateVenue(ctx context.Context, req CreateVenueRequest) 
 
 // GetByID, queue/round servislerinin cooldown/tur ayarları gibi
 // venue.settings alanlarına erişmesi için kullanılır.
-//
-// TODO: venuesCollection.FindOne({_id: venueId}) ile çek, bulunamazsa uygun
-// bir hata dön (bkz. ErrVenueNotFound benzeri bir tanım gerekebilir,
-// venue_errors.go).
 func (s *VenueService) GetByID(ctx context.Context, venueId bson.ObjectID) (*Venue, error) {
-	panic("TODO: GetByID mantığı yazılacak")
+	filter := bson.M{"_id": venueId}
+
+	var venue Venue
+	err := s.venuesCollection.FindOne(ctx, filter).Decode(&venue)
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, ErrVenueNotFound
+		}
+
+		return nil, fmt.Errorf("failed to get venue: %w", err)
+	}
+
+	return &venue, nil
 }
