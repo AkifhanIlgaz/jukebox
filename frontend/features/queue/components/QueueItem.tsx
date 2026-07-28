@@ -17,8 +17,8 @@ export function QueueItem({
   youtubeId: string;
   title: string;
   channel: string;
-  onPlayNow: () => void;
-  onRemove: () => void;
+  onPlayNow?: () => void;
+  onRemove?: () => void;
   isRemoving?: boolean;
 }) {
   return (
@@ -38,19 +38,23 @@ export function QueueItem({
         <div className="truncate text-xs text-muted">{channel}</div>
       </div>
       <div className="flex-1" />
-      <Button isIconOnly aria-label="Hemen çal" size="sm" variant="secondary" onPress={onPlayNow}>
-        <Play className="size-3.5" />
-      </Button>
-      <Button
-        isIconOnly
-        aria-label="Sıradan çıkar"
-        isPending={isRemoving}
-        size="sm"
-        variant="danger-soft"
-        onPress={onRemove}
-      >
-        {({ isPending }) => (isPending ? <Spinner color="current" size="sm" /> : <Trash2 className="size-3.5" />)}
-      </Button>
+      {onPlayNow ? (
+        <Button isIconOnly aria-label="Hemen çal" size="sm" variant="secondary" onPress={onPlayNow}>
+          <Play className="size-3.5" />
+        </Button>
+      ) : null}
+      {onRemove ? (
+        <Button
+          isIconOnly
+          aria-label="Sıradan çıkar"
+          isPending={isRemoving}
+          size="sm"
+          variant="danger-soft"
+          onPress={onRemove}
+        >
+          {({ isPending }) => (isPending ? <Spinner color="current" size="sm" /> : <Trash2 className="size-3.5" />)}
+        </Button>
+      ) : null}
     </div>
   );
 }

@@ -41,23 +41,17 @@ export function QueueProvider({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleEnded = useCallback(() => {
-    if (nowPlayingId) void venueApi.reportPlayerState({ youtubeId: nowPlayingId, state: "ended" });
+  const handleAdvance = useCallback(() => {
     advance();
-  }, [nowPlayingId, advance]);
-
-  const handleError = useCallback(() => {
-    if (nowPlayingId) void venueApi.reportPlayerState({ youtubeId: nowPlayingId, state: "error" });
-    advance();
-  }, [nowPlayingId, advance]);
+  }, [advance]);
 
   const handlePlaying = useCallback(() => {
-    if (nowPlayingId) void venueApi.reportPlayerState({ youtubeId: nowPlayingId, state: "playing" });
+    if (nowPlayingId) void venueApi.reportNowPlaying(nowPlayingId);
   }, [nowPlayingId]);
 
   const player = useYouTubePlayer(nowPlayingId, {
-    onEnded: handleEnded,
-    onError: handleError,
+    onEnded: handleAdvance,
+    onError: handleAdvance,
     onPlaying: handlePlaying,
   });
 

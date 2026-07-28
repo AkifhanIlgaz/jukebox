@@ -30,13 +30,6 @@ export type UpdateVenueInput = {
   settings: VenueSettings;
 };
 
-export type PlayerState = "playing" | "ended" | "error";
-
-export type ReportPlayerStateInput = {
-  youtubeId: string;
-  state: PlayerState;
-};
-
 class VenueApi extends BaseApi {
   async getVenue() {
     return this.get("/venue", venueSchema);
@@ -46,8 +39,8 @@ class VenueApi extends BaseApi {
     return this.put("/venue", venueSchema, input);
   }
 
-  async reportPlayerState(input: ReportPlayerStateInput) {
-    return this.post("/venue/player-state", z.unknown(), input);
+  async reportNowPlaying(youtubeId: string) {
+    return this.post("/venue/now-playing", z.unknown(), { youtubeId });
   }
 }
 

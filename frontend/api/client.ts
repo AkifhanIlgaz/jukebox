@@ -29,6 +29,16 @@ export function setAccessToken(token: string | null) {
   accessToken = token;
 }
 
+export function getAccessToken() {
+  return accessToken;
+}
+
+// getWsUrl, NEXT_PUBLIC_API_URL'i (http/https) ws/wss şemasına çevirip WS
+// endpoint'inin tam URL'ini üretir (bkz. backend/internal/ws).
+export function getWsUrl(path: string) {
+  return `${process.env.NEXT_PUBLIC_API_URL}`.replace(/^http/, "ws") + path;
+}
+
 apiClient.interceptors.request.use((config) => {
   if (accessToken) {
     config.headers.Authorization = `Bearer ${accessToken}`;
