@@ -5,6 +5,55 @@ Bir karar değişirse silinmez; üstüne "İPTAL/REVİZE (tarih)" notu düşül�
 
 ---
 
+## 2026-07-28 — Mekan sahibi auth: access + refresh token (süresiz JWT kararı REVİZE)
+
+**Karar:** Tek süresiz JWT modeli terk edildi; ikili token modeline geçildi:
+
+- **Access token:** JWT, ömür **15 dakika**. Cookie'de TAŞINMAZ — `/login`
+  response body'sinde (`{accessToken}`) döner, frontend bunu yalnızca memory'de
+  (`api/client.ts` modülü içinde) tutar ve her isteğe `Authorization: Bearer
+  <token>` header'ıyla ekler.
+- **Refresh token:** rastgele opak string (JWT değil), `httpOnly` `refresh_token`
+  çerezinde, ömür **1 yıl**. Yeni `refresh_tokens` Mongo koleksiyonunda hash'lenerek
+  saklanır (`{userId, venueId, role, tokenHash, expiresAt, createdAt}`). Düz metin
+  token DB'ye yazılmaz.
+- **Dedike `/refresh` endpoint'i YOK.** Yenileme `middleware.Auth()` içinde
+  şeffafça olur: gelen access token geçersiz/süresi dolmuşsa, middleware
+  `refresh_token` çerezini (her isteğe zaten otomatik eklenir) okur, DB'de
+  hash'ini arar; geçerliyse **rotate eder** (eski kayıt silinir, yeni refresh
+  token kaydedilir, yeni `refresh_token` çerezi set edilir), yeni access token'ı
+  `X-Access-Token` response header'ında döner ve istek normal şekilde devam eder.
+  Refresh token da yoksa/geçersizse 401. Rotation, çalınan bir refresh token'ın
+  süresiz kullanılabilmesini engeller.
+- **Logout:** DB'deki refresh token kaydı silinir + `refresh_token`/`role`/
+  `username` çerezleri temizlenir (access token zaten cookie değil, frontend
+  memory'den siler). `role`/`username` çerezlerinin `MaxAge`'i artık refresh
+  token ömrüyle (1 yıl) eşleşir.
+- **Frontend:** axios instance'ında (`api/client.ts`) request interceptor access
+  token'ı memory'den `Authorization` header'ına ekler; response interceptor HER
+  response'ta (başarılı ya da hatalı) `X-Access-Token` header'ı varsa memory'yi
+  günceller. Bu header CORS'ta `ExposeHeaders` ile açıkça expose edilmiş olmalı
+  (aksi halde tarayıcı JS'e vermez). Gerçek 401 (refresh token da geçersiz)
+  durumunda özel bir retry mantığı yok — `AuthContext`/`useCurrentUser` zaten
+  `role`/`username` cookie'lerinin yokluğuna göre `/login`'e yönlendiriyor.
+
+**Not:** Access token'ın cookie yerine memory+header ile taşınması, `httpOnly`
+refresh cookie modeline göre CSRF'e karşı ekstra bir katman (access token
+tarayıcı tarafından isteklere otomatik eklenmiyor, yalnızca uygulama kodu
+ekliyor) — ilk taslakta access token da cookie'ydi, bu kısım implementasyon
+sırasında (mevcut `frontend/api/client.ts` iskeletiyle tutarlı olsun diye)
+memory+header'a çevrildi.
+
+**İPTAL/REVİZE (2026-07-28):** 2026-07-24 kararındaki "süresiz JWT, session store
+yok" kısmı geçersiz. Session store artık var (`refresh_tokens` koleksiyonu) ama
+stateless olan yalnızca access token; sadece refresh token DB'de tutuluyor.
+
+**Neden:** Kullanıcı kararı — süresiz access token'ın çalınması durumunda risk
+penceresi sonsuzdu; kısa ömürlü access token + revoke edilebilir (DB'de tutulan,
+rotate edilen) refresh token bu riski sınırlıyor. Refresh token'ın DB'de tutulması
+("ekstra koleksiyon istemiyoruz" kısıtından vazgeçildi) revoke/oturum sonlandırma
+imkanı sağlıyor; access token stateless kaldığı için her istekte DB'ye gidilmiyor.
+
 ## 2026-07-27 — Rol sistemi: Big Boss / Admin
 
 **Karar:** `users` dokümanına `role: "boss" | "admin"` alanı eklendi. Mekan başına

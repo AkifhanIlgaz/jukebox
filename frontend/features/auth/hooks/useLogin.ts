@@ -1,6 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
 import { AxiosError } from "axios";
 import { useRouter } from "next/navigation";
+import { setAccessToken } from "@/api/client";
 import { authApi } from "@/features/auth/api/auth-api";
 import type { LoginFormValues } from "@/features/auth/schemas/login-schema";
 
@@ -18,7 +19,8 @@ export function useLogin() {
 
   const mutation = useMutation({
     mutationFn: (values: LoginFormValues) => authApi.login(values),
-    onSuccess: () => {
+    onSuccess: (data) => {
+      setAccessToken(data.accessToken);
       router.push("/admin");
     },
   });

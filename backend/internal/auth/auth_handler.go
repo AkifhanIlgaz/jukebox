@@ -57,7 +57,7 @@ func (h *AuthHandler) Login(ctx fiber.Ctx) error {
 		return err
 	}
 
-	tokenString, user, err := h.service.Login(ctx.Context(), req)
+	accessToken, refreshToken, user, err := h.service.Login(ctx.Context(), req)
 	if err != nil {
 		if errors.Is(err, ErrInvalidCredentials) {
 			return fiber.NewError(fiber.StatusUnauthorized, err.Error())
@@ -65,22 +65,13 @@ func (h *AuthHandler) Login(ctx fiber.Ctx) error {
 		return err
 	}
 
-	ctx.Cookie(&fiber.Cookie{
-		Name:     token.CookieName,
-		Value:    tokenString,
-		Path:     "/",
-		Domain:   h.cookieDomain,
-		MaxAge:   int(token.CookieMaxAge.Seconds()),
-		HTTPOnly: true,
-		Secure:   h.cookieDomain != "",
-		SameSite: fiber.CookieSameSiteLaxMode,
-	})
+	token.SetRefreshCookie(ctx, h.cookieDomain, refreshToken)
 	ctx.Cookie(&fiber.Cookie{
 		Name:     roleCookieName,
 		Value:    user.Role,
 		Path:     "/",
 		Domain:   h.cookieDomain,
-		MaxAge:   int(token.CookieMaxAge.Seconds()),
+		MaxAge:   int(token.RefreshTokenTTL.Seconds()),
 		HTTPOnly: false,
 		Secure:   h.cookieDomain != "",
 		SameSite: fiber.CookieSameSiteLaxMode,
@@ -90,24 +81,28 @@ func (h *AuthHandler) Login(ctx fiber.Ctx) error {
 		Value:    user.Username,
 		Path:     "/",
 		Domain:   h.cookieDomain,
-		MaxAge:   int(token.CookieMaxAge.Seconds()),
+		MaxAge:   int(token.RefreshTokenTTL.Seconds()),
 		HTTPOnly: false,
 		Secure:   h.cookieDomain != "",
 		SameSite: fiber.CookieSameSiteLaxMode,
 	})
 
-	return ctx.JSON(fiber.Map{"message": "logged in"})
+	return ctx.JSON(fiber.Map{"message": "logged in", "accessToken": accessToken})
 }
 
 func (h *AuthHandler) Logout(ctx fiber.Ctx) error {
-	for _, name := range []string{token.CookieName, roleCookieName, usernameCookieName} {
+	if err := h.service.Logout(ctx.Context(), ctx.Cookies(token.RefreshCookieName)); err != nil {
+		return err
+	}
+
+	for _, name := range []string{token.RefreshCookieName, roleCookieName, usernameCookieName} {
 		ctx.Cookie(&fiber.Cookie{
 			Name:     name,
 			Value:    "",
 			Path:     "/",
 			Domain:   h.cookieDomain,
 			MaxAge:   -1,
-			HTTPOnly: name == token.CookieName,
+			HTTPOnly: name == token.RefreshCookieName,
 			Secure:   h.cookieDomain != "",
 			SameSite: fiber.CookieSameSiteLaxMode,
 		})

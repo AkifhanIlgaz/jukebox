@@ -11,6 +11,7 @@ import (
 	"github.com/AkifhanIlgaz/jukebox/internal/middleware"
 	"github.com/AkifhanIlgaz/jukebox/internal/queue"
 	"github.com/AkifhanIlgaz/jukebox/internal/round"
+	"github.com/AkifhanIlgaz/jukebox/internal/token"
 	"github.com/AkifhanIlgaz/jukebox/internal/track"
 	"github.com/AkifhanIlgaz/jukebox/internal/venue"
 	"github.com/AkifhanIlgaz/jukebox/internal/youtube"
@@ -41,8 +42,9 @@ func main() {
 
 	ytClient := youtube.NewClient()
 
-	authMiddleware := middleware.NewAuthMiddleware(cfg.JWTSecret)
-	authService := auth.NewAuthService(database, cfg.JWTSecret)
+	refreshStore := token.NewRefreshStore(database)
+	authMiddleware := middleware.NewAuthMiddleware(cfg.JWTSecret, refreshStore, cfg.CookieDomain)
+	authService := auth.NewAuthService(database, cfg.JWTSecret, refreshStore)
 	authHandler := auth.NewAuthHandler(authService, authMiddleware, cfg.CookieDomain)
 
 	trackService := track.NewTrackService(database, ytClient)
@@ -80,6 +82,10 @@ func main() {
 	app.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{cfg.AllowedOrigin},
 		AllowCredentials: true,
+		// X-Access-Token: middleware.Auth() şeffaf refresh sonrası yeni access
+		// token'ı buradan döner (bkz. karar 2026-07-28); tarayıcı bu header'ı
+		// JS'e Expose edilmeden vermez.
+		ExposeHeaders: []string{token.AccessTokenHeader},
 	}))
 	app.Use(middleware.Device(cfg.CookieDomain))
 	app.Use(logger.New())

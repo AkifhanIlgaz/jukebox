@@ -1,6 +1,12 @@
-import axios, { AxiosError, type InternalAxiosRequestConfig } from "axios";
+import axios, { type AxiosError, type RawAxiosResponseHeaders, type AxiosResponseHeaders } from "axios";
 
 const GENERIC_ERROR_MESSAGE = "Beklenmeyen bir hata oluştu. Lütfen tekrar deneyin.";
+
+// Access token'ı taşıyan response header'ı — backend, access token süresi
+// dolmuşsa refresh_token çerezini (her istekte otomatik gider) okuyup
+// şeffafça yeniler ve yenisini buradan döner. Ayrı bir /refresh isteği YOK
+// (bkz. docs/decisions.md, karar 2026-07-28).
+const ACCESS_TOKEN_HEADER = "x-access-token";
 
 export const apiClient = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL,
@@ -30,40 +36,20 @@ apiClient.interceptors.request.use((config) => {
   return config;
 });
 
-type RetriableConfig = InternalAxiosRequestConfig & { _retried?: boolean };
-
-let refreshPromise: Promise<string> | null = null;
-
-async function refreshAccessToken(): Promise<string> {
-  const { data } = await axios.post<{ accessToken: string }>(
-    `${process.env.NEXT_PUBLIC_API_URL}/auth/refresh`,
-    null,
-    { withCredentials: true },
-  );
-  return data.accessToken;
+function captureRefreshedAccessToken(headers?: RawAxiosResponseHeaders | AxiosResponseHeaders) {
+  const refreshed = headers?.[ACCESS_TOKEN_HEADER];
+  if (typeof refreshed === "string" && refreshed.length > 0) {
+    setAccessToken(refreshed);
+  }
 }
 
 apiClient.interceptors.response.use(
-  (response) => response,
-  async (error: AxiosError) => {
-    const config = error.config as RetriableConfig | undefined;
-
-    if (error.response?.status !== 401 || !config || config._retried) {
-      return Promise.reject(error);
-    }
-    config._retried = true;
-
-    try {
-      refreshPromise ??= refreshAccessToken().finally(() => {
-        refreshPromise = null;
-      });
-      const token = await refreshPromise;
-      setAccessToken(token);
-      config.headers.Authorization = `Bearer ${token}`;
-      return apiClient(config);
-    } catch (refreshError) {
-      setAccessToken(null);
-      return Promise.reject(refreshError);
-    }
+  (response) => {
+    captureRefreshedAccessToken(response.headers);
+    return response;
+  },
+  (error: AxiosError) => {
+    captureRefreshedAccessToken(error.response?.headers);
+    return Promise.reject(error);
   },
 );

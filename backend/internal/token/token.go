@@ -1,12 +1,21 @@
-// Package token, oturum JWT'sinin üretilip doğrulanmasından sorumludur. Hem
-// auth (login'de token üretir) hem middleware (isteklerde token doğrular) buna
-// bağımlı — aralarında import cycle oluşmasın diye ayrı bir pakette. Rol
-// sabitleri burada DEĞİL, auth paketinde yaşıyor (bkz. auth.RoleAdmin/RoleBoss);
+// Package token, oturum JWT'sinin (access token) ve refresh token'ın
+// üretilip doğrulanmasından sorumludur. Hem auth (login/refresh'te token
+// üretir) hem middleware (isteklerde access token doğrular) buna bağımlı —
+// aralarında import cycle oluşmasın diye ayrı bir pakette. Rol sabitleri
+// burada DEĞİL, auth paketinde yaşıyor (bkz. auth.RoleAdmin/RoleBoss);
 // middleware rol kontrolünü auth'tan bağımsız, generic RequireRole(role string)
 // ile yapıyor.
+//
+// İkili token modeli (karar 2026-07-28, bkz. docs/decisions.md): access token
+// kısa ömürlü stateless JWT, refresh token ise DB'de (RefreshStore) hash'lenerek
+// saklanan, rotate edilen opak string.
 package token
 
 import (
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"time"
 
@@ -14,12 +23,17 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
-// CookieName, JWT'nin taşındığı httpOnly çerezin adıdır.
-const CookieName = "auth_token"
+// RefreshCookieName, refresh token'ın taşındığı httpOnly çerezin adıdır.
+// Access token artık cookie'de taşınmaz — /login ve /refresh response body'sinde
+// döner, frontend Authorization: Bearer header'ıyla gönderir (bkz. karar 2026-07-28).
+const RefreshCookieName = "refresh_token"
 
-// CookieMaxAge, çerezin tarayıcıda ne kadar saklanacağını belirler. Token'ın
-// kendisinde süre sınırı YOK (kullanıcı isteği); logout dışında geçersiz olmaz.
-const CookieMaxAge = 365 * 24 * time.Hour
+// AccessTokenTTL, access token'ın (ve auth_token çerezinin) ömrüdür.
+const AccessTokenTTL = 15 * time.Minute
+
+// RefreshTokenTTL, refresh token'ın (ve refresh_token çerezinin) ömrüdür.
+// Aktif kullanımda her /refresh çağrısı rotation ile bu süreyi yeniden başlatır.
+const RefreshTokenTTL = 365 * 24 * time.Hour
 
 var ErrInvalidToken = errors.New("Oturum geçersiz veya süresi dolmuş.")
 
@@ -30,21 +44,40 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
-// GenerateToken süresiz bir JWT üretir (ExpiresAt yok) — oturum yalnızca logout'ta
-// (çerez silinince) sona erer.
-func GenerateToken(userId, venueId bson.ObjectID, role, secret string) (string, error) {
+// GenerateAccessToken, AccessTokenTTL sonra sona eren bir JWT üretir.
+func GenerateAccessToken(userId, venueId bson.ObjectID, role, secret string) (string, error) {
+	now := time.Now()
 	claims := Claims{
 		UserID:  userId.Hex(),
 		VenueID: venueId.Hex(),
 		Role:    role,
 		RegisteredClaims: jwt.RegisteredClaims{
-			IssuedAt: jwt.NewNumericDate(time.Now()),
+			IssuedAt:  jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(now.Add(AccessTokenTTL)),
 		},
 	}
 
 	jwtToken := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
 	return jwtToken.SignedString([]byte(secret))
+}
+
+// GenerateRefreshToken, DB'de hash'lenerek saklanacak opak bir refresh token
+// üretir (JWT değil — client'ın claim'leri okuyabilmesine gerek yok).
+func GenerateRefreshToken() (string, error) {
+	buf := make([]byte, 32)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+
+	return base64.RawURLEncoding.EncodeToString(buf), nil
+}
+
+// HashRefreshToken, DB'ye yalnızca hash'in yazılması için kullanılır — düz
+// metin refresh token hiçbir yerde saklanmaz.
+func HashRefreshToken(plain string) string {
+	sum := sha256.Sum256([]byte(plain))
+	return hex.EncodeToString(sum[:])
 }
 
 func ParseToken(tokenString, secret string) (*Claims, error) {

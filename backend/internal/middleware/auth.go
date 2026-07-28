@@ -1,10 +1,14 @@
 package middleware
 
 import (
+	"strings"
+
 	"github.com/AkifhanIlgaz/jukebox/internal/token"
 	"github.com/gofiber/fiber/v3"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
+
+const bearerPrefix = "Bearer "
 
 const (
 	// UserIDLocalsKey, VenueIDLocalsKey ile handler'lar auth middleware'in doldurduğu
@@ -15,25 +19,36 @@ const (
 )
 
 type AuthMiddleware struct {
-	jwtSecret string
+	jwtSecret    string
+	refreshStore *token.RefreshStore
+	cookieDomain string
 }
 
-func NewAuthMiddleware(jwtSecret string) *AuthMiddleware {
+func NewAuthMiddleware(jwtSecret string, refreshStore *token.RefreshStore, cookieDomain string) *AuthMiddleware {
 	return &AuthMiddleware{
-		jwtSecret: jwtSecret,
+		jwtSecret:    jwtSecret,
+		refreshStore: refreshStore,
+		cookieDomain: cookieDomain,
 	}
 }
 
+// Auth, access token'ı (Authorization: Bearer) doğrular. Geçersiz/süresi
+// dolmuşsa dedike bir /refresh endpoint'ine gitmek yerine burada şeffafça
+// yenilenir: refresh_token çerezi (her istekte zaten otomatik gelir) DB'de
+// aranır, geçerliyse rotate edilir (yeni refresh cookie yazılır, yeni access
+// token X-Access-Token response header'ında döner) ve istek normal şekilde
+// devam eder. Refresh token da yoksa/geçersizse 401 döner.
 func (mw *AuthMiddleware) Auth() fiber.Handler {
 	return func(c fiber.Ctx) error {
-		tokenString := c.Cookies(token.CookieName)
-		if tokenString == "" {
-			return fiber.NewError(fiber.StatusUnauthorized, "giriş gerekli")
-		}
+		authHeader := c.Get(fiber.HeaderAuthorization)
+		tokenString := strings.TrimPrefix(authHeader, bearerPrefix)
 
 		claims, err := token.ParseToken(tokenString, mw.jwtSecret)
 		if err != nil {
-			return fiber.NewError(fiber.StatusUnauthorized, "oturum geçersiz")
+			claims, err = mw.refreshFromCookie(c)
+			if err != nil {
+				return fiber.NewError(fiber.StatusUnauthorized, "oturum geçersiz")
+			}
 		}
 
 		userID, err := bson.ObjectIDFromHex(claims.UserID)
@@ -52,6 +67,23 @@ func (mw *AuthMiddleware) Auth() fiber.Handler {
 
 		return c.Next()
 	}
+}
+
+func (mw *AuthMiddleware) refreshFromCookie(c fiber.Ctx) (*token.Claims, error) {
+	refreshCookie := c.Cookies(token.RefreshCookieName)
+	if refreshCookie == "" {
+		return nil, token.ErrInvalidToken
+	}
+
+	accessToken, refreshToken, err := mw.refreshStore.Rotate(c.Context(), refreshCookie, mw.jwtSecret)
+	if err != nil {
+		return nil, err
+	}
+
+	token.SetRefreshCookie(c, mw.cookieDomain, refreshToken)
+	c.Set(token.AccessTokenHeader, accessToken)
+
+	return token.ParseToken(accessToken, mw.jwtSecret)
 }
 
 // RequireRole, Auth()'tan sonra zincirlenir; sadece verilen role sahip

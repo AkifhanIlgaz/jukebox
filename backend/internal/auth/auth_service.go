@@ -17,10 +17,11 @@ const usersCollectionName = "users"
 
 type AuthService struct {
 	usersCollection *mongo.Collection
+	refreshStore    *token.RefreshStore
 	jwtSecret       string
 }
 
-func NewAuthService(db *mongo.Database, jwtSecret string) *AuthService {
+func NewAuthService(db *mongo.Database, jwtSecret string, refreshStore *token.RefreshStore) *AuthService {
 	usersCollection := db.Collection(usersCollectionName)
 
 	_, err := usersCollection.Indexes().CreateOne(context.Background(), mongo.IndexModel{
@@ -50,31 +51,63 @@ func NewAuthService(db *mongo.Database, jwtSecret string) *AuthService {
 
 	return &AuthService{
 		usersCollection: usersCollection,
+		refreshStore:    refreshStore,
 		jwtSecret:       jwtSecret,
 	}
 }
 
-func (s *AuthService) Login(ctx context.Context, req LoginRequest) (string, *User, error) {
-	var user User
+// Login, kimlik doğrulama başarılıysa bir access token ve bir refresh token
+// döner. Refresh token hash'lenerek DB'ye yazılır (bkz. karar 2026-07-28).
+func (s *AuthService) Login(ctx context.Context, req LoginRequest) (accessToken, refreshToken string, user *User, err error) {
+	var foundUser User
 
-	err := s.usersCollection.FindOne(ctx, bson.M{"username": req.Username}).Decode(&user)
+	err = s.usersCollection.FindOne(ctx, bson.M{"username": req.Username}).Decode(&foundUser)
 	if err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
-			return "", nil, ErrInvalidCredentials
+			return "", "", nil, ErrInvalidCredentials
 		}
-		return "", nil, fmt.Errorf("failed to find user: %w", err)
+		return "", "", nil, fmt.Errorf("failed to find user: %w", err)
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
-		return "", nil, ErrInvalidCredentials
+	if err := bcrypt.CompareHashAndPassword([]byte(foundUser.PasswordHash), []byte(req.Password)); err != nil {
+		return "", "", nil, ErrInvalidCredentials
 	}
 
-	tokenString, err := token.GenerateToken(user.ID, user.VenueID, user.Role, s.jwtSecret)
+	accessToken, refreshToken, err = s.issueTokens(ctx, foundUser.ID, foundUser.VenueID, foundUser.Role)
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to generate token: %w", err)
+		return "", "", nil, err
 	}
 
-	return tokenString, &user, nil
+	return accessToken, refreshToken, &foundUser, nil
+}
+
+// Logout, refresh token kaydını DB'den siler (revoke). Çerez temizleme
+// handler'ın sorumluluğunda.
+func (s *AuthService) Logout(ctx context.Context, plainRefreshToken string) error {
+	if plainRefreshToken == "" {
+		return nil
+	}
+
+	return s.refreshStore.DeleteByHash(ctx, token.HashRefreshToken(plainRefreshToken))
+}
+
+func (s *AuthService) issueTokens(ctx context.Context, userId, venueId bson.ObjectID, role string) (accessToken, refreshToken string, err error) {
+	accessToken, err = token.GenerateAccessToken(userId, venueId, role, s.jwtSecret)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to generate access token: %w", err)
+	}
+
+	refreshToken, err = token.GenerateRefreshToken()
+	if err != nil {
+		return "", "", fmt.Errorf("failed to generate refresh token: %w", err)
+	}
+
+	err = s.refreshStore.Save(ctx, userId, venueId, role, token.HashRefreshToken(refreshToken), time.Now().Add(token.RefreshTokenTTL))
+	if err != nil {
+		return "", "", err
+	}
+
+	return accessToken, refreshToken, nil
 }
 
 // ListByVenue, mekanın admin+boss hesaplarını (ayarlar sayfasındaki kullanıcı
