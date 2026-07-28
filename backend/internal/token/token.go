@@ -32,8 +32,18 @@ const RefreshCookieName = "refresh_token"
 const AccessTokenTTL = 15 * time.Minute
 
 // RefreshTokenTTL, refresh token'ın (ve refresh_token çerezinin) ömrüdür.
-// Aktif kullanımda her /refresh çağrısı rotation ile bu süreyi yeniden başlatır.
-const RefreshTokenTTL = 365 * 24 * time.Hour
+// Rotate edilmez (karar 2026-07-28-2, bkz. docs/decisions.md) — aynı token
+// sliding window ile kullanıldıkça ötelenir. 30 saat, mekanların günlük açılış
+// döngüsünü (örn. her gün ~10:00) birkaç saatlik sapmayla rahatça kapsayacak
+// ama bir gün hiç kullanılmazsa (~48 saatlik boşluk) süresi dolacak şekilde
+// seçildi.
+const RefreshTokenTTL = 30 * time.Hour
+
+// RefreshExtendThreshold, sliding ötelemenin tetiklendiği eşiktir: kalan süre
+// bunun altına düşmeden expires_at'e dokunulmaz. Amaç, her 15 dakikalık
+// şeffaf access token yenilemesinde DB'ye yazmamak — ötelemenin sıklığı
+// TTL/threshold oranıyla sınırlanır (burada günde ~1 kez).
+const RefreshExtendThreshold = RefreshTokenTTL / 2
 
 var ErrInvalidToken = errors.New("Oturum geçersiz veya süresi dolmuş.")
 

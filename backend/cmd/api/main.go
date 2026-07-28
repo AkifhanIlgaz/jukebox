@@ -14,6 +14,7 @@ import (
 	"github.com/AkifhanIlgaz/jukebox/internal/token"
 	"github.com/AkifhanIlgaz/jukebox/internal/track"
 	"github.com/AkifhanIlgaz/jukebox/internal/venue"
+	"github.com/AkifhanIlgaz/jukebox/internal/ws"
 	"github.com/AkifhanIlgaz/jukebox/internal/youtube"
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/cors"
@@ -43,7 +44,7 @@ func main() {
 	ytClient := youtube.NewClient()
 
 	refreshStore := token.NewRefreshStore(database)
-	authMiddleware := middleware.NewAuthMiddleware(cfg.JWTSecret, refreshStore, cfg.CookieDomain)
+	authMiddleware := middleware.NewAuthMiddleware(cfg.JWTSecret, refreshStore)
 	authService := auth.NewAuthService(database, cfg.JWTSecret, refreshStore)
 	authHandler := auth.NewAuthHandler(authService, authMiddleware, cfg.CookieDomain)
 
@@ -51,7 +52,12 @@ func main() {
 	trackHandler := track.NewTrackHandler(trackService, authMiddleware)
 
 	venueService := venue.NewVenueService(database, redisClient)
-	venueHandler := venue.NewVenueHandler(venueService, authMiddleware)
+
+	hub := ws.NewHub()
+	go hub.Run()
+
+	venueHandler := venue.NewVenueHandler(venueService, authMiddleware, hub)
+	wsHandler := ws.NewHandler(hub, venueService)
 
 	queueService := queue.NewQueueService(redisClient, trackService, venueService)
 	queueHandler := queue.NewQueueHandler(queueService, authMiddleware)
@@ -100,6 +106,7 @@ func main() {
 	queueHandler.RegisterRoutes(app)
 	roundHandler.RegisterRoutes(app)
 	venueHandler.RegisterRoutes(app)
+	wsHandler.RegisterRoutes(app)
 
 	log.Fatal(app.Listen(":" + cfg.Port))
 }

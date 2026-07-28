@@ -97,6 +97,17 @@ func (s *VenueService) GetBySlug(ctx context.Context, slug string) (*Venue, erro
 	return &venue, nil
 }
 
+// GetVenueIDBySlug, ws paketinin VenueResolver arayüzünü karşılar (müşteri
+// WS bağlantısının slug -> venueID çözümü için).
+func (s *VenueService) GetVenueIDBySlug(ctx context.Context, slug string) (bson.ObjectID, error) {
+	v, err := s.GetBySlug(ctx, slug)
+	if err != nil {
+		return bson.ObjectID{}, err
+	}
+
+	return v.ID, nil
+}
+
 // GetNowPlaying, admin panelin player'ının en son raporladığı şu an çalan
 // şarkının YouTube ID'sini döner; hiç raporlanmamışsa boş string döner.
 func (s *VenueService) GetNowPlaying(ctx context.Context, venueId bson.ObjectID) (string, error) {
@@ -145,16 +156,6 @@ func (s *VenueService) UpdateVenue(ctx context.Context, venueId bson.ObjectID, r
 func (s *VenueService) SetNowPlaying(ctx context.Context, venueId bson.ObjectID, youtubeId string) error {
 	if err := s.redisClient.Set(ctx, nowPlayingKey(venueId), youtubeId, 0).Err(); err != nil {
 		return fmt.Errorf("failed to set now playing: %w", err)
-	}
-
-	return nil
-}
-
-// ClearNowPlaying, çalan şarkı bitince (ended) veya oynatılamayınca (error)
-// çağrılır.
-func (s *VenueService) ClearNowPlaying(ctx context.Context, venueId bson.ObjectID) error {
-	if err := s.redisClient.Del(ctx, nowPlayingKey(venueId)).Err(); err != nil {
-		return fmt.Errorf("failed to clear now playing: %w", err)
 	}
 
 	return nil

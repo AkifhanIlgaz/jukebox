@@ -5,18 +5,21 @@ import (
 
 	"github.com/AkifhanIlgaz/jukebox/internal/auth"
 	"github.com/AkifhanIlgaz/jukebox/internal/middleware"
+	"github.com/AkifhanIlgaz/jukebox/internal/ws"
 	"github.com/gofiber/fiber/v3"
 )
 
 type VenueHandler struct {
 	service        *VenueService
 	authMiddleware *middleware.AuthMiddleware
+	hub            *ws.Hub
 }
 
-func NewVenueHandler(service *VenueService, authMiddleware *middleware.AuthMiddleware) *VenueHandler {
+func NewVenueHandler(service *VenueService, authMiddleware *middleware.AuthMiddleware, hub *ws.Hub) *VenueHandler {
 	return &VenueHandler{
 		service:        service,
 		authMiddleware: authMiddleware,
+		hub:            hub,
 	}
 }
 
@@ -26,7 +29,7 @@ func (h *VenueHandler) RegisterRoutes(app *fiber.App) {
 
 	venue.Get("/", h.authMiddleware.RequireRole(auth.RoleBoss), h.GetVenue)
 	venue.Put("/", h.authMiddleware.RequireRole(auth.RoleBoss), h.UpdateVenue)
-	venue.Post("/player-state", h.ReportPlayerState)
+	venue.Post("/now-playing", h.ReportNowPlaying)
 
 	app.Get("/v/:slug", h.GetPublicVenue)
 }
@@ -70,13 +73,15 @@ func (h *VenueHandler) UpdateVenue(ctx fiber.Ctx) error {
 	return ctx.Status(200).JSON(v)
 }
 
-// ReportPlayerState, admin panelin YouTube IFrame player'ından gelen
-// onStateChange/onError eventlerini alır ve Redis'teki "şu an çalıyor"
-// bilgisini günceller.
-func (h *VenueHandler) ReportPlayerState(ctx fiber.Ctx) error {
+// ReportNowPlaying, admin panelin YouTube IFrame player'ı bir track'i fiilen
+// çalmaya başladığında çağırır (ilk açılış, hata sonrası fallback, ya da
+// player'ın kendi isteğiyle REST /queue/next'ten aldığı sıradaki track —
+// hepsi için). nowPlaying güncellenir ve o venue'nin müşteri WS
+// bağlantılarına NOW_PLAYING broadcast edilir.
+func (h *VenueHandler) ReportNowPlaying(ctx fiber.Ctx) error {
 	venueId := middleware.GetVenueID(ctx)
 
-	var req PlayerStateRequest
+	var req ReportNowPlayingRequest
 	if err := ctx.Bind().Body(&req); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
@@ -85,16 +90,11 @@ func (h *VenueHandler) ReportPlayerState(ctx fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
 
-	var err error
-	switch req.State {
-	case PlayerStatePlaying:
-		err = h.service.SetNowPlaying(ctx.Context(), venueId, req.YoutubeID)
-	case PlayerStateEnded, PlayerStateError:
-		err = h.service.ClearNowPlaying(ctx.Context(), venueId)
-	}
-	if err != nil {
+	if err := h.service.SetNowPlaying(ctx.Context(), venueId, req.YoutubeID); err != nil {
 		return err
 	}
+
+	h.hub.BroadcastToVenue(venueId, ws.NowPlaying, ws.NowPlayingPayload{YoutubeVideoID: req.YoutubeID})
 
 	return ctx.SendStatus(200)
 }

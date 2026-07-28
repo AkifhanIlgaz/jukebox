@@ -21,23 +21,23 @@ const (
 type AuthMiddleware struct {
 	jwtSecret    string
 	refreshStore *token.RefreshStore
-	cookieDomain string
 }
 
-func NewAuthMiddleware(jwtSecret string, refreshStore *token.RefreshStore, cookieDomain string) *AuthMiddleware {
+func NewAuthMiddleware(jwtSecret string, refreshStore *token.RefreshStore) *AuthMiddleware {
 	return &AuthMiddleware{
 		jwtSecret:    jwtSecret,
 		refreshStore: refreshStore,
-		cookieDomain: cookieDomain,
 	}
 }
 
 // Auth, access token'ı (Authorization: Bearer) doğrular. Geçersiz/süresi
 // dolmuşsa dedike bir /refresh endpoint'ine gitmek yerine burada şeffafça
 // yenilenir: refresh_token çerezi (her istekte zaten otomatik gelir) DB'de
-// aranır, geçerliyse rotate edilir (yeni refresh cookie yazılır, yeni access
-// token X-Access-Token response header'ında döner) ve istek normal şekilde
-// devam eder. Refresh token da yoksa/geçersizse 401 döner.
+// aranır, geçerliyse yeni bir access token üretilir (X-Access-Token response
+// header'ında döner) ve istek normal şekilde devam eder. Refresh token rotate
+// EDİLMEZ, sliding window ile ötelenir (bkz. token.RefreshStore.Refresh) —
+// cookie'nin yeniden yazılmasına gerek yok. Refresh token da yoksa/geçersizse
+// 401 döner.
 func (mw *AuthMiddleware) Auth() fiber.Handler {
 	return func(c fiber.Ctx) error {
 		authHeader := c.Get(fiber.HeaderAuthorization)
@@ -75,12 +75,11 @@ func (mw *AuthMiddleware) refreshFromCookie(c fiber.Ctx) (*token.Claims, error) 
 		return nil, token.ErrInvalidToken
 	}
 
-	accessToken, refreshToken, err := mw.refreshStore.Rotate(c.Context(), refreshCookie, mw.jwtSecret)
+	accessToken, err := mw.refreshStore.Refresh(c.Context(), refreshCookie, mw.jwtSecret)
 	if err != nil {
 		return nil, err
 	}
 
-	token.SetRefreshCookie(c, mw.cookieDomain, refreshToken)
 	c.Set(token.AccessTokenHeader, accessToken)
 
 	return token.ParseToken(accessToken, mw.jwtSecret)

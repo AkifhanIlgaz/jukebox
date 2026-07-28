@@ -81,37 +81,37 @@ func (s *RefreshStore) Save(ctx context.Context, userId, venueId bson.ObjectID, 
 	return nil
 }
 
-// Rotate, geçerli bir refresh token karşılığında yeni bir access + refresh
-// token çifti üretir: eski kayıt silinir (tek kullanımlık), yenisi kaydedilir.
-// Çalınan bir refresh token'ın süresiz kullanılabilmesini bu şekilde engeller.
-func (s *RefreshStore) Rotate(ctx context.Context, plainRefreshToken, secret string) (accessToken, refreshToken string, err error) {
+// Refresh, geçerli bir refresh token karşılığında yeni bir access token
+// üretir. Token rotate EDİLMEZ (karar 2026-07-28-2): aynı refresh token
+// (ve cookie) kullanılmaya devam eder, sadece kalan süresi
+// RefreshExtendThreshold'un altına düştüyse expires_at sliding window ile
+// yeniden RefreshTokenTTL'e ötelenir. Bu sayede eşzamanlı istekler arasında
+// eski rotation modelindeki "kaybeden 401 alır" yarış durumu ortadan kalkar —
+// burada sadece okuma + koşullu, idempotent bir update var.
+func (s *RefreshStore) Refresh(ctx context.Context, plainRefreshToken, secret string) (accessToken string, err error) {
 	tokenHash := HashRefreshToken(plainRefreshToken)
 
 	existing, err := s.FindByHash(ctx, tokenHash)
 	if err != nil {
-		return "", "", err
-	}
-
-	if err := s.DeleteByHash(ctx, tokenHash); err != nil {
-		return "", "", err
+		return "", err
 	}
 
 	accessToken, err = GenerateAccessToken(existing.UserID, existing.VenueID, existing.Role, secret)
 	if err != nil {
-		return "", "", fmt.Errorf("failed to generate access token: %w", err)
+		return "", fmt.Errorf("failed to generate access token: %w", err)
 	}
 
-	refreshToken, err = GenerateRefreshToken()
-	if err != nil {
-		return "", "", fmt.Errorf("failed to generate refresh token: %w", err)
+	if time.Until(existing.ExpiresAt) < RefreshExtendThreshold {
+		_, err := s.collection.UpdateOne(ctx,
+			bson.M{"token_hash": tokenHash},
+			bson.M{"$set": bson.M{"expires_at": time.Now().Add(RefreshTokenTTL)}},
+		)
+		if err != nil {
+			return "", fmt.Errorf("failed to extend refresh token: %w", err)
+		}
 	}
 
-	err = s.Save(ctx, existing.UserID, existing.VenueID, existing.Role, HashRefreshToken(refreshToken), time.Now().Add(RefreshTokenTTL))
-	if err != nil {
-		return "", "", err
-	}
-
-	return accessToken, refreshToken, nil
+	return accessToken, nil
 }
 
 // SetCookie, refresh_token çerezini yazar — hem login'de (AuthHandler) hem

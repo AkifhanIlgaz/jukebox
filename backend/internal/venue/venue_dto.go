@@ -73,30 +73,17 @@ type PublicVenueResponse struct {
 	NowPlaying string `json:"nowPlaying"`
 }
 
-type PlayerState string
-
-const (
-	PlayerStatePlaying PlayerState = "playing"
-	PlayerStateEnded   PlayerState = "ended"
-	PlayerStateError   PlayerState = "error"
-)
-
-// PlayerStateRequest, admin panelin YouTube IFrame player'ından gelen
-// onStateChange/onError eventlerini backend'e iletmek için kullanılır.
-type PlayerStateRequest struct {
-	YoutubeID string      `json:"youtubeId"`
-	State     PlayerState `json:"state"`
+// ReportNowPlayingRequest, admin panelin YouTube IFrame player'ı bir track'i
+// fiilen çalmaya başladığında (ilk açılış, hata sonrası fallback, ya da
+// player'ın kendi isteğiyle REST /queue/next'ten aldığı sıradaki track —
+// hepsi için) gönderdiği rapordur.
+type ReportNowPlayingRequest struct {
+	YoutubeID string `json:"youtubeId"`
 }
 
-func (r *PlayerStateRequest) Validate() error {
-	switch r.State {
-	case PlayerStatePlaying:
-		if r.YoutubeID == "" {
-			return ErrYoutubeIDRequired
-		}
-	case PlayerStateEnded, PlayerStateError:
-	default:
-		return ErrInvalidPlayerState
+func (r *ReportNowPlayingRequest) Validate() error {
+	if r.YoutubeID == "" {
+		return ErrYoutubeIDRequired
 	}
 
 	return nil
