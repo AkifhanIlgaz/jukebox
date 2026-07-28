@@ -66,8 +66,6 @@ func (h *RoundHandler) StartRound(ctx fiber.Ctx) error {
 // CloseRound, admin panelden mevcut açık oylama turunu süresi dolmadan
 // manuel olarak kapatır. Kazanan seçilmez, kuyruğa ekleme yapılmaz; yeni
 // round admin tekrar "Oylama başlat" demeden açılmaz.
-//
-// TODO: RoundService.CloseRound implement edilecek (scaffold — bkz. CLAUDE.md).
 func (h *RoundHandler) CloseRound(ctx fiber.Ctx) error {
 	venueId := middleware.GetVenueID(ctx)
 

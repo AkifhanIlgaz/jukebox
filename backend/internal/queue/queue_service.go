@@ -64,10 +64,12 @@ func (s *QueueService) Remove(ctx context.Context, venueId bson.ObjectID, youtub
 
 // ClearQueue, venue'nin tüm sırasını sıfırlar (redis'teki queueKey listesini
 // tamamen boşaltır).
-//
-// TODO: implement edilecek (scaffold — bkz. CLAUDE.md, birlikte yazılacak).
 func (s *QueueService) ClearQueue(ctx context.Context, venueId bson.ObjectID) error {
-	panic("not implemented")
+	if err := s.redisClient.Del(ctx, queueKey(venueId)).Err(); err != nil {
+		return fmt.Errorf("failed to clear queue: %w", err)
+	}
+
+	return nil
 }
 
 // Len, sıradaki bekleyen şarkı sayısını döner.

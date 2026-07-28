@@ -164,13 +164,39 @@ func (s *RoundService) OpenRound(ctx context.Context, venueId bson.ObjectID) (*R
 
 // CloseRound, açık bir round'u süresi dolmadan manuel olarak kapatır:
 // kazanan seçmeden status'u closed yapar ve round'un redis oylarını siler.
-// scheduleFinish ile kurulmuş zamanlayıcıyı iptal etmek ve FinishRound'un bu
-// round'u tekrar işlemeye çalışmasını engellemek (status guard) burada ele
-// alınması gereken noktalar.
-//
-// TODO: implement edilecek (scaffold — bkz. CLAUDE.md, birlikte yazılacak).
+// Bir sonraki round'u AÇMAZ (FinishRound'un aksine) — admin tekrar hazır
+// olduğunda OpenRound'u kendisi çağırır. scheduleFinish ile kurulmuş
+// zamanlayıcı burada iptal edilmiyor (referansı tutulmuyor); onun yerine
+// güncelleme `status: open` koşuluyla yapılıyor ve FinishRound artık
+// zaten kapalı bir round'da no-op oluyor (bkz. FinishRound'daki status
+// guard) — zamanlayıcı ileride ateşlense de zararsız.
 func (s *RoundService) CloseRound(ctx context.Context, venueId bson.ObjectID) (*Round, error) {
-	panic("not implemented")
+	round, err := s.FindActiveRound(ctx, venueId)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := s.roundsCollection.UpdateOne(ctx, bson.M{
+		"_id":    round.ID,
+		"status": StatusOpen,
+	}, bson.M{
+		"$set": bson.M{"status": StatusClosed},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to close round: %w", err)
+	}
+	if result.ModifiedCount == 0 {
+		// FinishRound ile eş zamanlı kapanmış olabilir (race) — artık açık değil.
+		return nil, ErrNoOpenRound
+	}
+
+	if err := s.redisClient.Del(ctx, votesKey(round.ID)).Err(); err != nil {
+		return nil, fmt.Errorf("failed to clear round votes: %w", err)
+	}
+
+	round.Status = StatusClosed
+
+	return round, nil
 }
 
 func (s *RoundService) FindActiveRound(ctx context.Context, venueId bson.ObjectID) (*Round, error) {
@@ -212,6 +238,13 @@ func (s *RoundService) FinishRound(ctx context.Context, roundId bson.ObjectID) e
 	// Zamanlayıcı yanlışlıkla erken tetiklenirse (ör. yeniden başlatma
 	// sonrası çakışan bir zamanlayıcı) round'u bozmamak için guard.
 	if time.Now().Before(round.EndsAt) {
+		return nil
+	}
+
+	// Round CloseRound ile manuel kapatılmış olabilir — o durumda scheduleFinish
+	// zamanlayıcısı (referansı tutulmadığı için iptal edilemiyor) yine de
+	// ateşlenir, burada no-op olması gerekir.
+	if round.Status != StatusOpen {
 		return nil
 	}
 

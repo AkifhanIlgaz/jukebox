@@ -83,8 +83,6 @@ func (h *QueueHandler) Next(ctx fiber.Ctx) error {
 }
 
 // ClearQueue, admin panelden venue'nin tüm çalma sırasını sıfırlar.
-//
-// TODO: QueueService.ClearQueue implement edilecek (scaffold — bkz. CLAUDE.md).
 func (h *QueueHandler) ClearQueue(ctx fiber.Ctx) error {
 	venueId := middleware.GetVenueID(ctx)
 
