@@ -26,6 +26,9 @@ func (h *VenueHandler) RegisterRoutes(app *fiber.App) {
 
 	venue.Get("/", h.authMiddleware.RequireRole(auth.RoleBoss), h.GetVenue)
 	venue.Put("/", h.authMiddleware.RequireRole(auth.RoleBoss), h.UpdateVenue)
+	venue.Post("/player-state", h.ReportPlayerState)
+
+	app.Get("/v/:slug", h.GetPublicVenue)
 }
 
 // GetVenue, admin panelde mekan bilgisi ve ayarlarını göstermek için kullanılır.
@@ -65,4 +68,58 @@ func (h *VenueHandler) UpdateVenue(ctx fiber.Ctx) error {
 	}
 
 	return ctx.Status(200).JSON(v)
+}
+
+// ReportPlayerState, admin panelin YouTube IFrame player'ından gelen
+// onStateChange/onError eventlerini alır ve Redis'teki "şu an çalıyor"
+// bilgisini günceller.
+func (h *VenueHandler) ReportPlayerState(ctx fiber.Ctx) error {
+	venueId := middleware.GetVenueID(ctx)
+
+	var req PlayerStateRequest
+	if err := ctx.Bind().Body(&req); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+
+	if err := req.Validate(); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+
+	var err error
+	switch req.State {
+	case PlayerStatePlaying:
+		err = h.service.SetNowPlaying(ctx.Context(), venueId, req.YoutubeID)
+	case PlayerStateEnded, PlayerStateError:
+		err = h.service.ClearNowPlaying(ctx.Context(), venueId)
+	}
+	if err != nil {
+		return err
+	}
+
+	return ctx.SendStatus(200)
+}
+
+// GetPublicVenue, müşterinin QR ile açtığı /v/{slug} sayfasının ilk yükte
+// çektiği mekan bilgisidir (auth gerektirmez).
+func (h *VenueHandler) GetPublicVenue(ctx fiber.Ctx) error {
+	slug := ctx.Params("slug")
+
+	v, err := h.service.GetBySlug(ctx.Context(), slug)
+	if err != nil {
+		if errors.Is(err, ErrVenueNotFound) {
+			return fiber.NewError(fiber.StatusNotFound, err.Error())
+		}
+		return err
+	}
+
+	nowPlaying, err := h.service.GetNowPlaying(ctx.Context(), v.ID)
+	if err != nil {
+		return err
+	}
+
+	return ctx.Status(200).JSON(PublicVenueResponse{
+		Name:       v.Name,
+		LogoURL:    v.LogoURL,
+		NowPlaying: nowPlaying,
+	})
 }

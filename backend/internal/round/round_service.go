@@ -217,6 +217,17 @@ func (s *RoundService) FindActiveRound(ctx context.Context, venueId bson.ObjectI
 	return &round, nil
 }
 
+// FindActiveRoundBySlug, müşterinin /v/{slug} sayfasının public round
+// endpoint'i için slug'tan venue'yu çözüp FindActiveRound'u çağırır.
+func (s *RoundService) FindActiveRoundBySlug(ctx context.Context, slug string) (*Round, error) {
+	v, err := s.venueService.GetBySlug(ctx, slug)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.FindActiveRound(ctx, v.ID)
+}
+
 // FinishRound, bir round'un süresi dolduğunda (OpenRound/FinishRound'un
 // kurduğu scheduleFinish zamanlayıcısı üzerinden) tetiklenir. Round'u
 // kapatır, kazananı hiç beklemeden kuyruğa ekler (böylece hemen çalmaya

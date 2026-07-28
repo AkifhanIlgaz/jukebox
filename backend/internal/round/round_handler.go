@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	"github.com/AkifhanIlgaz/jukebox/internal/middleware"
+	"github.com/AkifhanIlgaz/jukebox/internal/venue"
 	"github.com/gofiber/fiber/v3"
 )
 
@@ -26,6 +27,8 @@ func (h *RoundHandler) RegisterRoutes(app *fiber.App) {
 	round.Get("/", h.GetActiveRound)
 	round.Post("/start", h.StartRound)
 	round.Post("/close", h.CloseRound)
+
+	app.Get("/v/:slug/round", h.GetPublicActiveRound)
 }
 
 // GetActiveRound, venue'nin şu an açık olan oylama turunu döner. Açık tur
@@ -61,6 +64,22 @@ func (h *RoundHandler) StartRound(ctx fiber.Ctx) error {
 	}
 
 	return ctx.Status(201).JSON(r)
+}
+
+// GetPublicActiveRound, müşterinin /v/{slug} sayfasının ilk yükte çektiği
+// aktif oylama turudur (auth gerektirmez). Açık tur yoksa 404 döner.
+func (h *RoundHandler) GetPublicActiveRound(ctx fiber.Ctx) error {
+	slug := ctx.Params("slug")
+
+	r, err := h.service.FindActiveRoundBySlug(ctx.Context(), slug)
+	if err != nil {
+		if errors.Is(err, ErrNoOpenRound) || errors.Is(err, venue.ErrVenueNotFound) {
+			return fiber.NewError(fiber.StatusNotFound, err.Error())
+		}
+		return err
+	}
+
+	return ctx.Status(200).JSON(r)
 }
 
 // CloseRound, admin panelden mevcut açık oylama turunu süresi dolmadan

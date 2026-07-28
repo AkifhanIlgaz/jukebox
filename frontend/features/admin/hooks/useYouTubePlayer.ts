@@ -27,6 +27,7 @@ declare global {
           events?: {
             onReady?: (event: YouTubePlayerEvent) => void;
             onStateChange?: (event: YouTubePlayerEvent) => void;
+            onError?: (event: YouTubePlayerEvent) => void;
           };
         },
       ) => YouTubePlayer;
@@ -59,14 +60,21 @@ function loadYouTubeIframeApi() {
   return apiLoadPromise;
 }
 
-export function useYouTubePlayer(youtubeId: string | null, options?: { onEnded?: () => void }) {
+export function useYouTubePlayer(
+  youtubeId: string | null,
+  options?: { onEnded?: () => void; onError?: (errorCode: number) => void; onPlaying?: () => void },
+) {
   const mountRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YouTubePlayer | null>(null);
   const loadedVideoIdRef = useRef<string | null>(null);
   const onEndedRef = useRef(options?.onEnded);
+  const onErrorRef = useRef(options?.onError);
+  const onPlayingRef = useRef(options?.onPlaying);
   useEffect(() => {
     onEndedRef.current = options?.onEnded;
-  }, [options?.onEnded]);
+    onErrorRef.current = options?.onError;
+    onPlayingRef.current = options?.onPlaying;
+  }, [options?.onEnded, options?.onError, options?.onPlaying]);
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
@@ -114,9 +122,15 @@ export function useYouTubePlayer(youtubeId: string | null, options?: { onEnded?:
               if (playing || event.data === window.YT?.PlayerState.CUED) {
                 setDuration(event.target.getDuration());
               }
+              if (playing) {
+                onPlayingRef.current?.();
+              }
               if (event.data === window.YT?.PlayerState.ENDED) {
                 onEndedRef.current?.();
               }
+            },
+            onError: (event) => {
+              onErrorRef.current?.(event.data ?? -1);
             },
           },
         });

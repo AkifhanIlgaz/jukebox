@@ -5,6 +5,7 @@ import (
 
 	"github.com/AkifhanIlgaz/jukebox/internal/middleware"
 	"github.com/AkifhanIlgaz/jukebox/internal/track"
+	"github.com/AkifhanIlgaz/jukebox/internal/venue"
 	"github.com/gofiber/fiber/v3"
 )
 
@@ -29,6 +30,8 @@ func (h *QueueHandler) RegisterRoutes(app *fiber.App) {
 	queue.Post("/next", h.Next)
 	queue.Delete("/", h.ClearQueue)
 	queue.Delete("/:youtubeId", h.RemoveFromQueue)
+
+	app.Get("/v/:slug/queue", h.GetPublicQueue)
 }
 
 func (h *QueueHandler) GetQueue(ctx fiber.Ctx) error {
@@ -91,6 +94,22 @@ func (h *QueueHandler) ClearQueue(ctx fiber.Ctx) error {
 	}
 
 	return ctx.SendStatus(200)
+}
+
+// GetPublicQueue, müşterinin /v/{slug} sayfasının ilk yükte çektiği çalma
+// sırasıdır (auth gerektirmez).
+func (h *QueueHandler) GetPublicQueue(ctx fiber.Ctx) error {
+	slug := ctx.Params("slug")
+
+	tracks, total, err := h.service.ListBySlug(ctx.Context(), slug)
+	if err != nil {
+		if errors.Is(err, venue.ErrVenueNotFound) {
+			return fiber.NewError(fiber.StatusNotFound, err.Error())
+		}
+		return err
+	}
+
+	return ctx.Status(200).JSON(fiber.Map{"tracks": tracks, "total": total})
 }
 
 func (h *QueueHandler) RemoveFromQueue(ctx fiber.Ctx) error {

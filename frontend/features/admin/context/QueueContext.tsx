@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 
+import { venueApi } from "@/features/admin/api/venueApi";
 import { useYouTubePlayer } from "@/features/admin/hooks/useYouTubePlayer";
 import { useNextTrack } from "@/features/queue/hooks/useNextTrack";
 
@@ -40,7 +41,25 @@ export function QueueProvider({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const player = useYouTubePlayer(nowPlayingId, { onEnded: advance });
+  const handleEnded = useCallback(() => {
+    if (nowPlayingId) void venueApi.reportPlayerState({ youtubeId: nowPlayingId, state: "ended" });
+    advance();
+  }, [nowPlayingId, advance]);
+
+  const handleError = useCallback(() => {
+    if (nowPlayingId) void venueApi.reportPlayerState({ youtubeId: nowPlayingId, state: "error" });
+    advance();
+  }, [nowPlayingId, advance]);
+
+  const handlePlaying = useCallback(() => {
+    if (nowPlayingId) void venueApi.reportPlayerState({ youtubeId: nowPlayingId, state: "playing" });
+  }, [nowPlayingId]);
+
+  const player = useYouTubePlayer(nowPlayingId, {
+    onEnded: handleEnded,
+    onError: handleError,
+    onPlaying: handlePlaying,
+  });
 
   const playNow = useCallback((youtubeId: string) => {
     setNowPlayingId(youtubeId);

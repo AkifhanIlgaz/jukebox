@@ -156,6 +156,17 @@ func (s *QueueService) List(ctx context.Context, venueId bson.ObjectID) ([]track
 	return tracks, total, nil
 }
 
+// ListBySlug, müşterinin /v/{slug} sayfasının public queue endpoint'i için
+// slug'tan venue'yu çözüp List'i çağırır.
+func (s *QueueService) ListBySlug(ctx context.Context, slug string) ([]track.PlaylistTrack, int64, error) {
+	v, err := s.venueService.GetBySlug(ctx, slug)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return s.List(ctx, v.ID)
+}
+
 // EnqueueManual, admin panelden elle eklenen bir şarkıyı venue playlist'ine
 // (henüz yoksa) ekler ve sıraya alır.
 func (s *QueueService) EnqueueManual(ctx context.Context, req track.AddTrackRequest) error {

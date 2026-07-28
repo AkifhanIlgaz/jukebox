@@ -50,7 +50,7 @@ func main() {
 	trackService := track.NewTrackService(database, ytClient)
 	trackHandler := track.NewTrackHandler(trackService, authMiddleware)
 
-	venueService := venue.NewVenueService(database)
+	venueService := venue.NewVenueService(database, redisClient)
 	venueHandler := venue.NewVenueHandler(venueService, authMiddleware)
 
 	queueService := queue.NewQueueService(redisClient, trackService, venueService)
