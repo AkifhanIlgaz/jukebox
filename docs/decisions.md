@@ -5,6 +5,100 @@ Bir karar değişirse silinmez; üstüne "İPTAL/REVİZE (tarih)" notu düşül�
 
 ---
 
+## 2026-07-28 — Playlist importu: YouTube Data API (sınırlı kapsam), belirsiz linkte client-side seçim
+
+**Karar:** Şarkı ekleme modalına, girilen link bir playlist'in parçasıysa (ör.
+`?v=...&list=...`) "Bu şarkının dahil olduğu playlistteki tüm şarkıları ekle" checkbox'ı
+eklendi; kullanıcı yazarken client-side (frontend) URL'i parse edip video/playlist
+id'lerini anında çıkarır, backend'e gitmeden checkbox'ı animasyonla gösterir/gizler.
+Sadece playlist linki (video id yok) girilirse checkbox'a gerek yok, tüm liste zaten
+eklenir.
+
+`POST /tracks` sözleşmesi `{ youtubeUrl, mode?: "video" | "playlist" }` oldu. `mode`
+yalnızca link her iki id'yi birden içerdiğinde anlamlıdır; backend yine de linki kendi
+tarafında parse eder ve `mode` eksikken (ör. doğrudan API çağrısı) `422` benzeri bir
+hata döner — client-side seçim asıl UX'tir, backend validasyonu savunma amaçlıdır.
+
+**API key kapsamı:** Tekli şarkı eklemede metadata hâlâ oEmbed'den geliyor (key
+gerektirmez, CLAUDE.md'deki "API key yok" kuralı bu akış için geçerliliğini koruyor).
+Playlist importu YouTube Data API v3 (`playlistItems.list`) kullanıyor — bu, key
+gerektiren tek akış. Key `YOUTUBE_API_KEY` env değişkeninden okunuyor
+(`backend/.env`, gitignore'da). Tek importta en fazla 500 şarkı çekiliyor (quota ve
+playlist şişkinliğini sınırlamak için); silinmiş/gizli videolar atlanıyor. Playlist'te
+zaten var olan şarkılar importu durdurmaz, sadece atlanır (`skipped` sayacı).
+
+**Neden:** Kullanıcı tercihi. Backend'in URL'i her durumda kendi tarafında da
+doğrulaması ("backend belirlesin" sorusuna yanıt) korunuyor, ama gerçek karar anı
+kullanıcıya link'i yapıştırdığı anda gösteriliyor — ayrı bir "tek şarkı/playlist" moduna
+önceden karar vermek zorunda kalmıyor.
+
+## 2026-07-28 — Refresh token: rotation kaldırıldı, 30 saat sliding window'a geçildi (REVİZE)
+
+**Karar (REVİZE EDİLDİ):** `RefreshStore.Rotate` kaldırıldı, yerine `RefreshStore.Refresh`
+geldi. Artık refresh token her kullanımda yeni bir token'la değiştirilmiyor (rotate
+edilmiyor) — aynı plaintext token (ve cookie) sürdürülüyor, sadece kalan süresi
+`RefreshExtendThreshold`'un (TTL/2) altına düştüyse `expires_at` sliding window ile
+yeniden `RefreshTokenTTL`'e ötelenir. `RefreshTokenTTL` 365 günden **30 saate** indirildi.
+
+**Neden:** Eski rotation modelinde `Rotate` atomik değildi (find→delete→insert ayrı
+adımlardı); admin panel access token süresi (15 dk) dolunca birden fazla isteği
+paralel attığında, aynı refresh cookie'siyle gelen eşzamanlı istekler birbirini
+yarıştırıyordu — bazıları "kaybedip" gereksiz yere 401 "oturum geçersiz" alıyordu
+(prod'da gözlemlendi, Mongo'daki `refresh_tokens` koleksiyonunda milisaniyeler içinde
+aynı eski token'dan türeyen çoklu kayıt kümeleriyle doğrulandı). Rotation'ın asıl amacı
+olan "çalınmış token reuse detection" bilinçli olarak feda edildi — bu panel sadece
+boss/admin girişi için (müşteri tarafında zaten login yok), risk yüzeyi düşük.
+
+30 saatlik TTL, kafelerin günlük açılış döngüsünü (örn. her gün ~10:00, birkaç saatlik
+sapmayla) login istemeden kapsayacak, ama bir gün hiç kullanılmazsa (~48 saatlik boşluk)
+oturumun düşmesini sağlayacak şekilde seçildi. Sliding ötelemenin DB'ye her 15 dakikada
+bir değil günde ~1 kez yazması için eşik (TTL/2) kondu.
+
+`AuthMiddleware`'in artık kullanılmayan `cookieDomain` alanı ve `NewAuthMiddleware`
+parametresi kaldırıldı (refresh cookie'si artık middleware'de yeniden yazılmıyor,
+sadece login'de `AuthHandler` yazıyor).
+
+## 2026-07-28 — Player artık WS'e bağlanmıyor: track raporlaması REST, sadece customer WS tek yönlü
+
+**Karar:** Aynı gün içindeki önceki "WS hub track yaşam döngüsü" kararı revize edildi.
+Player YouTube IFrame API zaten event-based çalıştığından (`onStateChange`/`onError`),
+bunun için kalıcı bir WS bağlantısı tutmaya gerek yok — player tamamen REST'te kalıyor:
+- `POST /venue/now-playing` (`{youtubeId}`): player bir track'i fiilen çalmaya
+  başladığında (ilk açılış, hata sonrası fallback, ya da player'ın kendi isteğiyle
+  REST `/queue/next`'ten aldığı sıradaki track — hepsi için) çağırır.
+  `VenueService.SetNowPlaying` çalışır, ardından `hub.BroadcastToVenue(venueId,
+  ws.NowPlaying, ws.NowPlayingPayload{...})` ile o venue'nin müşteri WS
+  bağlantılarına yayınlanır.
+- Hata durumunda (`onError`) player, "ended" ile **aynı şekilde** doğrudan REST
+  `/queue/next`'i çağırır — ayrı bir server-seçimli fallback akışı (eski
+  `TRACK_ERROR` → `PLAY_TRACK`) yok; `QueueService.Next` zaten aynı seçim mantığını
+  çalıştırıyor, kim çağırdığı önemli değil.
+- `internal/ws` paketi artık **tek yönlü**: sadece `/ws/venue/:slug` (müşteri)
+  bağlantısı var, `/ws/player` kaldırıldı. `Hub` hiçbir servise bağımlı değil —
+  sadece `BroadcastToVenue(venueID, msgType, payload)` sunan generic bir dağıtım
+  noktası; business mantığı (nowPlaying güncelleme vb.) çağıran REST handler'da
+  yaşıyor (`venue.VenueHandler.ReportNowPlaying`).
+- Bağımlılık yönü: `venue` paketi `ws.Hub`'ı import ediyor (broadcast için); `ws`
+  paketi `venue`'ye bağımlı DEĞİL — slug→venueID çözümü için kendi tanımladığı
+  `ws.VenueResolver` arayüzünü kullanıyor (`VenueService.GetVenueIDBySlug` bunu
+  karşılıyor). Böylece `ws <-> venue` import cycle'ı oluşmuyor.
+- `TRACK_STARTED` broadcast mesajı `NOW_PLAYING`'e yeniden adlandırıldı (server ->
+  customer, tek yön); `TRACK_ERROR`/`PLAY_TRACK`/`TrackStartedPayload`/
+  `TrackErrorPayload`/`PlayTrackPayload` kaldırıldı. Kullanılmayan `PLAYER_STATE`
+  sabiti (`message.go`) de bu revizyonla kaldırıldı.
+- Frontend: `usePlayerSocket` hook'u silindi. `QueueContext` tekrar
+  `venueApi.reportNowPlaying(youtubeId)` (REST) çağırıyor; `handleError` de
+  `handleEnded` gibi doğrudan `advance()` (REST `/queue/next`) çağırıyor.
+  Müşteri tarafı (`useNowPlayingSocket`) değişmedi, sadece dinlediği mesaj tipi
+  `NOW_PLAYING` oldu.
+
+**Neden:** Player→server yönü tek seferlik event raporlarından ibaret; bunun için
+ayrı bir WS bağlantısı (auth, reconnect, lifecycle) taşımak REST'e göre ekstra
+karmaşıklık katıyordu, gerçek bir kazanım getirmiyordu. WS'in asıl değeri
+server→customer realtime broadcast'te; player tarafı REST'te kalınca `ws`
+paketi de hem daha basit hem de tamamen servis-bağımsız (yeniden kullanılabilir)
+hale geldi.
+
 ## 2026-07-28 — Mekan sahibi auth: access + refresh token (süresiz JWT kararı REVİZE)
 
 **Karar:** Tek süresiz JWT modeli terk edildi; ikili token modeline geçildi:
@@ -449,6 +543,33 @@ adıyla birebir aynı. Next.js'in kendi zorunlu dosyaları (`page.tsx`, `layout.
 `providers.tsx` vb.) bu kuralın dışında, framework konvansiyonuna uyar.
 
 **Neden:** Kullanıcı tercihi; dosya adı ile export adı arasında fark olmasın istendi.
+
+## 2026-07-28 — WS hub track yaşam döngüsü: REST player-state raporlaması yerini WS'e bırakıyor (REVİZE, bkz. aynı gün "Player artık WS'e bağlanmıyor")
+
+**Karar (REVİZE EDİLDİ):** Player'ın track yaşam döngüsü artık REST `/venue/player-state` yerine
+`internal/ws` hub'ı üzerinden yürüyor:
+- `TRACK_STARTED` (player -> server) her fiilen çalmaya başlayan track için gönderilir
+  (ilk açılış, TRACK_ERROR sonrası fallback, player'ın kendi isteğiyle aldığı sıradaki
+  track — hepsi). Sunucu `VenueService.SetNowPlaying` çağırır ve **aynı mesajı** o
+  venue'nin `KindCustomer` bağlantılarına broadcast eder — ayrı bir `NOW_PLAYING` sabiti
+  eklenmedi, `TRACK_STARTED` iki yönde de kullanılıyor.
+- `TRACK_ERROR` (player -> server): sunucu `QueueService.Next` ile yeni track seçip
+  player'a `PLAY_TRACK` gönderir (`youtubeVideoId`, `title`, `channel`).
+- `TRACK_ENDED` **kaldırıldı** (message.go'da yok). Şarkı normal bitişinde player zaten
+  kendi isteğiyle REST `/queue/next` çağırıp yeni track alıyor (bu akış değişmedi);
+  yeni track çalmaya başlayınca `TRACK_STARTED` zaten gönderiliyor, ayrıca bir "bitti"
+  sinyaline (log/analytics dahil) ihtiyaç duyulmadı.
+- REST `POST /venue/player-state` endpoint'i, `PlayerStateRequest`/`PlayerState` DTO'su
+  ve `VenueService.ClearNowPlaying` kaldırıldı (kullanılmıyordu — "ended"/"error"
+  durumunda artık nowPlaying temizlenmiyor, yeni `TRACK_STARTED` zaten üzerine yazıyor).
+- Frontend: admin player sayfası (`QueueContext`) artık `venueApi.reportPlayerState`
+  yerine `usePlayerSocket` (`/ws/player?access_token=...`) kullanıyor; müşteri
+  `/v/{slug}` sayfası ilk yükü REST `GetPublicVenue`'dan alıyor, sonrasını
+  `useNowPlayingSocket` (`/ws/venue/:slug`) ile realtime güncelliyor.
+
+**Neden:** REST raporlama sadece Redis'i güncelliyordu, müşteri tarafına realtime
+broadcast yapamıyordu (poll gerektirirdi). WS hub zaten bu ihtiyaç için kuruluyordu;
+iki paralel mekanizma taşımanın getirisi yoktu.
 
 ## 2026-07-11 — Temel yapı (önceki oturum)
 

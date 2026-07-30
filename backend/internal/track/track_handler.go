@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	"github.com/AkifhanIlgaz/jukebox/internal/middleware"
+	"github.com/AkifhanIlgaz/jukebox/internal/youtube"
 	"github.com/gofiber/fiber/v3"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
@@ -37,7 +38,7 @@ func (h *TrackHandler) AddTrack(ctx fiber.Ctx) error {
 	}
 
 	if err := req.Validate(); err != nil {
-		if errors.Is(err, ErrYoutubeURLRequired) {
+		if errors.Is(err, ErrYoutubeURLRequired) || errors.Is(err, ErrAmbiguousYoutubeURL) || errors.Is(err, youtube.ErrInvalidURL) {
 			return fiber.NewError(fiber.StatusBadRequest, err.Error())
 		}
 		return err
@@ -46,6 +47,25 @@ func (h *TrackHandler) AddTrack(ctx fiber.Ctx) error {
 	req.UserId = middleware.GetUserID(ctx)
 	req.VenueId = middleware.GetVenueID(ctx)
 
+	if req.IsPlaylist() {
+		result, err := h.service.ImportPlaylist(ctx.Context(), req.VenueId, req.UserId, req.YoutubePlaylistID)
+		if err != nil {
+			if errors.Is(err, youtube.ErrAPIKeyMissing) {
+				return fiber.NewError(fiber.StatusServiceUnavailable, err.Error())
+			}
+			if errors.Is(err, youtube.ErrPlaylistNotFound) || errors.Is(err, youtube.ErrPlaylistEmpty) || errors.Is(err, youtube.ErrUnsupportedPlaylist) {
+				return fiber.NewError(fiber.StatusUnprocessableEntity, err.Error())
+			}
+			return err
+		}
+
+		return ctx.Status(201).JSON(AddTrackResponse{
+			Message: "playlist imported",
+			Added:   &result.Added,
+			Skipped: &result.Skipped,
+		})
+	}
+
 	if err := h.service.InsertTrack(ctx.Context(), req); err != nil {
 		if errors.Is(err, ErrTrackAlreadyExists) {
 			return fiber.NewError(fiber.StatusConflict, err.Error())
@@ -53,7 +73,7 @@ func (h *TrackHandler) AddTrack(ctx fiber.Ctx) error {
 		return err
 	}
 
-	return ctx.Status(201).JSON(fiber.Map{"message": "track added"})
+	return ctx.Status(201).JSON(AddTrackResponse{Message: "track added"})
 }
 
 func (h *TrackHandler) GetVenueTracks(ctx fiber.Ctx) error {

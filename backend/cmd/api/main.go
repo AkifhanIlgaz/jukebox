@@ -41,7 +41,7 @@ func main() {
 
 	defer redisClient.Close()
 
-	ytClient := youtube.NewClient()
+	ytClient := youtube.NewClient(cfg.YoutubeAPIKey)
 
 	refreshStore := token.NewRefreshStore(database)
 	authMiddleware := middleware.NewAuthMiddleware(cfg.JWTSecret, refreshStore)

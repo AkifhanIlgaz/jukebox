@@ -20,8 +20,10 @@ Müşteri QR okutur → aktif turda oy verir → kazanan şarkı mekandaki playe
   Mekan sahibi: email+şifre (bcrypt, kendi implementasyonumuz).
 - Player = mekan bilgisayarında açık duran web sayfamız (IFrame API). Player protokolü
   istemciden bağımsız; Chrome extension v2'de ikinci istemci olabilir.
-- Şarkı ekleme: YouTube linki yapıştır + oEmbed metadata (API key yok). Mekan başına
-  tek şarkı havuzu.
+- Şarkı ekleme: YouTube linki yapıştır. Tekli şarkı oEmbed metadata ile eklenir (API
+  key yok); link bir playlist içeriyorsa tüm playlist YouTube Data API ile import
+  edilebilir (`YOUTUBE_API_KEY`, sadece bu akışta kullanılır — bkz. decisions.md
+  2026-07-28). Mekan başına tek şarkı havuzu.
 - Deploy: frontend Vercel, backend+Mongo VPS; aynı kök domain (`app.X.com`/`api.X.com`),
   cihaz çerezi `Domain=.X.com`.
 - `youtube-nocookie.com` kullanma (Premium oturumunu tanımaz, reklamsızlık bozulur).

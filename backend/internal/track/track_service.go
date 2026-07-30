@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/AkifhanIlgaz/jukebox/internal/youtube"
@@ -63,7 +64,15 @@ func (s *TrackService) InsertTrack(ctx context.Context, req AddTrackRequest) err
 	playlistTrack.Title = trackInfo.Title
 	playlistTrack.Channel = trackInfo.Channel
 
-	_, err = s.playlistsCollection.InsertOne(ctx, playlistTrack)
+	return s.insertPlaylistTrack(ctx, playlistTrack)
+}
+
+// insertPlaylistTrack, metadata'sı (title/channel) zaten çözülmüş bir
+// PlaylistTrack'i venue'nin playlist'ine ekler ve global tracks sayacını
+// günceller. InsertTrack (oEmbed'den gelen tek şarkı) ve ImportPlaylist
+// (Data API'den gelen playlist şarkıları) tarafından paylaşılır.
+func (s *TrackService) insertPlaylistTrack(ctx context.Context, playlistTrack *PlaylistTrack) error {
+	_, err := s.playlistsCollection.InsertOne(ctx, playlistTrack)
 	if err != nil {
 		if mongo.IsDuplicateKeyError(err) {
 			return ErrTrackAlreadyExists
@@ -102,6 +111,70 @@ func (s *TrackService) InsertTrack(ctx context.Context, req AddTrackRequest) err
 	}
 
 	return nil
+}
+
+// ImportResult, bir playlist importunun sonucudur — kaç şarkının yeni
+// eklendiği ve kaçının venue'nin playlist'inde zaten var olduğu için
+// atlandığı.
+type ImportResult struct {
+	Added   int
+	Skipped int
+}
+
+// ImportPlaylist, bir YouTube playlist'indeki tüm şarkıları tek bir
+// InsertMany (ordered:false) ile venue'nin playlist'ine ekler. Zaten var olan
+// şarkılar (duplicate key) importu durdurmaz, sadece Skipped sayacına
+// yazılır — playlist'te tek bir şarkı yüzünden tüm import başarısız
+// olmamalı. Duplicate DIŞINDA bir write hatası ya da isteğin sunucuya hiç
+// ulaşamadığı bir hata (ör. network kopması) durumunda hangi şarkıların
+// gerçekten eklendiği bilinemeyeceğinden import başarısız sayılır.
+func (s *TrackService) ImportPlaylist(ctx context.Context, venueId, userId bson.ObjectID, playlistId string) (ImportResult, error) {
+	items, err := s.youtubeClient.FetchPlaylistItems(playlistId)
+	if err != nil {
+		return ImportResult{}, fmt.Errorf("failed to fetch playlist items: %w", err)
+	}
+
+	now := time.Now()
+
+	playlistTracks := make([]PlaylistTrack, len(items))
+	for i, item := range items {
+		playlistTracks[i] = PlaylistTrack{
+			YoutubeID: item.ID,
+			Title:     item.Title,
+			Channel:   item.Channel,
+			VenueID:   venueId,
+			AddedBy:   userId,
+			CreatedAt: now,
+		}
+	}
+
+	var result ImportResult
+	var importErr error
+
+	res, err := s.playlistsCollection.InsertMany(ctx, playlistTracks, options.InsertMany().SetOrdered(false))
+	if err != nil {
+		var bulkErr mongo.BulkWriteException
+		if !errors.As(err, &bulkErr) {
+			// BulkWriteException'a çevrilemeyen bir hata (ör. network hatası) —
+			// hiçbir dokümanın sunucuya ulaşıp ulaşmadığı belli değil, importu
+			// başarısız say.
+			importErr = fmt.Errorf("failed to insert playlist tracks: %w", err)
+		}
+
+		// Eger duplicate key hatasindan baska hata varsa, importu başarısız say.
+		if slices.ContainsFunc(bulkErr.ErrorCodes(), func(errorCode int) bool { return errorCode != 11000 }) {
+			importErr = fmt.Errorf("failed to insert playlist tracks: %w", bulkErr)
+		}
+	}
+
+	if res == nil {
+		return result, importErr
+	}
+
+	result.Added = len(res.InsertedIDs)
+	result.Skipped = len(playlistTracks) - len(res.InsertedIDs)
+
+	return result, importErr
 }
 
 func (s *TrackService) GetVenueTracks(ctx context.Context, venueId bson.ObjectID, req GetVenueTracksRequest) (*PaginatedTracksResponse, error) {
@@ -294,7 +367,6 @@ func (s *TrackService) oldestPlayedTrack(ctx context.Context, venueId bson.Objec
 // tamamlanır — zaten seçilmiş youtube_id'ler tekrar eklenmez. Playlist'te
 // n'den az şarkı varsa dönen slice n'den kısa olabilir (ErrNotEnoughTracks
 // gibi bir kontrol round tarafında yapılmalı).
-//
 func (s *TrackService) RandomCandidates(ctx context.Context, venueId bson.ObjectID, candidateCooldownCutoff time.Time, n int) ([]PlaylistTrack, error) {
 	filter := bson.M{"venue_id": venueId}
 	if !candidateCooldownCutoff.IsZero() {

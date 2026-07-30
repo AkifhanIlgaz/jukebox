@@ -1,10 +1,13 @@
 "use client";
 
 import type { Key } from "@heroui/react";
-import { Card, EmptyState, Label, ListBox, Pagination, Select, Spinner, Table } from "@heroui/react";
+import { Card, EmptyState, Label, ListBox, Pagination, ProgressBar, Select, Spinner, Table } from "@heroui/react";
+import { useMutationState } from "@tanstack/react-query";
 import { ListMusic } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
 
+import type { AddTrackPayload } from "@/features/playlist/api/trackApi";
 import { AddSongForm } from "@/features/playlist/components/AddSongForm";
 import { PlaylistTableRow } from "@/features/playlist/components/PlaylistTableRow";
 import { useDeleteTrack } from "@/features/playlist/hooks/useDeleteTrack";
@@ -19,6 +22,13 @@ export function PlaylistTable() {
   const tracksQuery = useTracks({ page, limit: rowsPerPage });
   const deleteTrackMutation = useDeleteTrack();
   const addToQueueMutation = useAddToQueue();
+  // Playlist importu (AddSongForm) uzun sürebileceği için modal işlem
+  // başlar başlamaz kapanıyor — ilerlemeyi burada, tablonun üstünde
+  // gösteriyoruz (bkz. useAddTrack'teki mutationKey).
+  const pendingPlaylistImports = useMutationState({
+    filters: { mutationKey: ["addTrack"], status: "pending" },
+    select: (mutation) => mutation.state.variables as AddTrackPayload | undefined,
+  }).filter((variables) => variables?.mode === "playlist").length;
 
   const tracks = tracksQuery.data?.tracks ?? [];
   const total = tracksQuery.data?.total ?? 0;
@@ -58,6 +68,32 @@ export function PlaylistTable() {
           <AddSongForm />
         </div>
       </div>
+      <AnimatePresence initial={false}>
+        {pendingPlaylistImports > 0 ? (
+          <motion.div
+            key="playlist-import-banner"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <div className="mb-3.5 flex flex-col gap-2 rounded-lg border border-accent/30 bg-accent/5 px-4 py-3">
+              <div className="flex items-center gap-2 text-sm font-medium text-accent">
+                <ListMusic className="size-4 animate-pulse" />
+                {pendingPlaylistImports === 1
+                  ? "1 oynatma listesi ekleniyor..."
+                  : `${pendingPlaylistImports} oynatma listesi ekleniyor...`}
+              </div>
+              <ProgressBar isIndeterminate aria-label="Oynatma listesi ekleniyor" size="sm">
+                <ProgressBar.Track>
+                  <ProgressBar.Fill />
+                </ProgressBar.Track>
+              </ProgressBar>
+            </div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
       <Table variant="secondary">
         <Table.ScrollContainer>
           <Table.Content aria-label="Playlist" className="min-w-150">

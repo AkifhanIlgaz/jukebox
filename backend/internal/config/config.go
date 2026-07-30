@@ -19,6 +19,9 @@ type Config struct {
 	RedisAddr     string
 	RedisPassword string
 	RedisDB       int
+	// YoutubeAPIKey, playlist importu için YouTube Data API v3'te kullanılır
+	// (tekli şarkı ekleme oEmbed ile devam ediyor, key gerektirmiyor).
+	YoutubeAPIKey string
 }
 
 func Load() Config {
@@ -35,6 +38,7 @@ func Load() Config {
 		RedisAddr:     getEnv("REDIS_ADDR", "localhost:6379"),
 		RedisPassword: os.Getenv("REDIS_PASSWORD"),
 		RedisDB:       getEnvInt("REDIS_DB", 0),
+		YoutubeAPIKey: os.Getenv("YOUTUBE_API_KEY"),
 	}
 }
 

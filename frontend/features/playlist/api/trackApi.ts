@@ -1,7 +1,6 @@
 import { z } from "zod";
 
 import { BaseApi } from "@/api/base-api";
-import type { AddSongFormValues } from "@/features/playlist/schemas/add-song-schema";
 
 const venueTrackSchema = z.object({
   id: z.string(),
@@ -26,11 +25,22 @@ export type PaginatedTracks = z.infer<typeof paginatedTracksSchema>;
 
 const addTrackResponseSchema = z.object({
   message: z.string(),
+  added: z.number().optional(),
+  skipped: z.number().optional(),
 });
 
+export type AddTrackResponse = z.infer<typeof addTrackResponseSchema>;
+
+export type AddTrackPayload = {
+  youtubeUrl: string;
+  // mode, link hem video hem playlist içerdiğinde ("v=...&list=...")
+  // hangisinin ekleneceğini belirtir; link tek anlamlıysa gerekmez.
+  mode?: "video" | "playlist";
+};
+
 class TrackApi extends BaseApi {
-  async addTrack(values: AddSongFormValues) {
-    return this.post("/tracks", addTrackResponseSchema, values);
+  async addTrack(payload: AddTrackPayload) {
+    return this.post("/tracks", addTrackResponseSchema, payload);
   }
 
   async getVenueTracks(params: { page: number; limit: number }) {
